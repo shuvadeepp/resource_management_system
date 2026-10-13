@@ -5,38 +5,60 @@ import java.time.LocalDateTime;
 import java.util.Date;
 
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.ManyToAny;
 import org.hibernate.annotations.UpdateTimestamp;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 @Entity
 @Table(name="employees")
+@JsonPropertyOrder({
+	"employeeCode",
+	"name",
+	"phone"
+}
+)
 public class Employees implements Serializable {
 	
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Integer employeeId;
+	@JsonIgnore
+	@Column(name="employee_id")
+	private Integer empId;
 	
-	private String employeeCode;
+	@Column(name="employee_code")
+	private String employeeId;
 	
 	@Column(name = "employee_name")
-	private String employeeName;
+	private String name;
 	
 	private String email;
 	
 	private String phone;
 	
-	@Column(name="designation_id")
-	private Integer designationId;
+	@Column(name = "total_experience_years")
+	private Integer totalExperienceYears;
 	
-	private Integer departmentId;
+	@ManyToOne
+	@JoinColumn(name="designation_id")
+	private Designation designation;
 	
-	@Column(name="location_id")
-	private Integer location_Id;
+	@ManyToOne
+	@JoinColumn(name="department_id")
+	private Departments department;
+	
+	@ManyToOne
+	@JoinColumn(name="location_id")
+	private Location location;
 	
 	@Column(name="date_of_joining")
 	private Date doj;
@@ -61,38 +83,28 @@ public class Employees implements Serializable {
 	@UpdateTimestamp
 	private LocalDateTime updatedAt;
 
-	@Override
-	public String toString() {
-		return "Employees [employeeId=" + employeeId + ", employeeCode=" + employeeCode + ", employeeName="
-				+ employeeName + ", email=" + email + ", phone=" + phone + ", designationId=" + designationId
-				+ ", departmentId=" + departmentId + ", location_Id=" + location_Id + ", doj=" + doj
-				+ ", employmentStatus=" + employmentStatus + ", sourceSystem=" + sourceSystem + ", erpEmpID=" + erpEmpID
-				+ ", erpLastSyncedAt=" + erpLastSyncedAt + ", createdAt=" + createdAt + ", updatedAt=" + updatedAt
-				+ "]";
+	public Integer getEmpId() {
+		return empId;
 	}
 
-	public Integer getEmployeeId() {
+	public void setEmpId(Integer empId) {
+		this.empId = empId;
+	}
+
+	public String getEmployeeId() {
 		return employeeId;
 	}
 
-	public void setEmployeeId(Integer employeeId) {
+	public void setEmployeeId(String employeeId) {
 		this.employeeId = employeeId;
 	}
 
-	public String getEmployeeCode() {
-		return employeeCode;
+	public String getName() {
+		return name;
 	}
 
-	public void setEmployeeCode(String employeeCode) {
-		this.employeeCode = employeeCode;
-	}
-
-	public String getEmployeeName() {
-		return employeeName;
-	}
-
-	public void setEmployeeName(String employeeName) {
-		this.employeeName = employeeName;
+	public void setName(String name) {
+		this.name = name;
 	}
 
 	public String getEmail() {
@@ -111,28 +123,36 @@ public class Employees implements Serializable {
 		this.phone = phone;
 	}
 
-	public Integer getDesignationId() {
-		return designationId;
+	public Integer getTotalExperienceYears() {
+		return totalExperienceYears;
 	}
 
-	public void setDesignationId(Integer designationId) {
-		this.designationId = designationId;
+	public void setTotalExperienceYears(Integer totalExperienceYears) {
+		this.totalExperienceYears = totalExperienceYears;
 	}
 
-	public Integer getDepartmentId() {
-		return departmentId;
+	public Designation getDesignation() {
+		return designation;
 	}
 
-	public void setDepartmentId(Integer departmentId) {
-		this.departmentId = departmentId;
+	public void setDesignation(Designation designation) {
+		this.designation = designation;
 	}
 
-	public Integer getLocation_Id() {
-		return location_Id;
+	public Departments getDepartment() {
+		return department;
 	}
 
-	public void setLocation_Id(Integer location_Id) {
-		this.location_Id = location_Id;
+	public void setDepartment(Departments department) {
+		this.department = department;
+	}
+
+	public Location getLocation() {
+		return location;
+	}
+
+	public void setLocation(Location location) {
+		this.location = location;
 	}
 
 	public Date getDoj() {
@@ -190,4 +210,18 @@ public class Employees implements Serializable {
 	public void setUpdatedAt(LocalDateTime updatedAt) {
 		this.updatedAt = updatedAt;
 	}
+
+	@Override
+	public String toString() {
+		return "Employees [empId=" + empId + ", employeeId=" + employeeId + ", name=" + name + ", email=" + email
+				+ ", phone=" + phone + ", totalExperienceYears=" + totalExperienceYears + ", designation=" + designation
+				+ ", department=" + department + ", location=" + location + ", doj=" + doj + ", employmentStatus="
+				+ employmentStatus + ", sourceSystem=" + sourceSystem + ", erpEmpID=" + erpEmpID + ", erpLastSyncedAt="
+				+ erpLastSyncedAt + ", createdAt=" + createdAt + ", updatedAt=" + updatedAt + "]";
+	}
+
+	
+
+	
+	
 }
