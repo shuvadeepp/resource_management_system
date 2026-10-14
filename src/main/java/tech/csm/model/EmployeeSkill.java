@@ -11,13 +11,13 @@ public class EmployeeSkill {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "employee_skill_id")
-    private Long employeeSkillId;
+    private Integer employeeSkillId;
 
     @Column(name = "employee_id")
-    private Long employeeId;
+    private Integer employeeId;
 
     @Column(name = "skill_id")
-    private Long skillId;
+    private Integer skillId;
 
     @Column(name = "skill_priority")
     private String skillPriority;
@@ -48,14 +48,14 @@ public class EmployeeSkill {
 
     public EmployeeSkill() {}
 
-    public Long getEmployeeSkillId() { return employeeSkillId; }
-    public void setEmployeeSkillId(Long employeeSkillId) { this.employeeSkillId = employeeSkillId; }
+    public Integer getEmployeeSkillId() { return employeeSkillId; }
+    public void setEmployeeSkillId(Integer employeeSkillId) { this.employeeSkillId = employeeSkillId; }
 
-    public Long getEmployeeId() { return employeeId; }
-    public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
+    public Integer getEmployeeId() { return employeeId; }
+    public void setEmployeeId(Integer employeeId) { this.employeeId = employeeId; }
 
-    public Long getSkillId() { return skillId; }
-    public void setSkillId(Long skillId) { this.skillId = skillId; }
+    public Integer getSkillId() { return skillId; }
+    public void setSkillId(Integer skillId) { this.skillId = skillId; }
 
     public String getSkillPriority() { return skillPriority; }
     public void setSkillPriority(String skillPriority) { this.skillPriority = skillPriority; }

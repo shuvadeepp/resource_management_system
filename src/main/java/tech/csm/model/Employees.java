@@ -13,51 +13,58 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+
 @Entity
-@Table(name="employees")
+@Table(name = "employees")
 public class Employees implements Serializable {
-	
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@Column(name = "employee_id")
 	private Integer employeeId;
-	
+
+	@Column(name = "employee_code")
 	private String employeeCode;
-	
+
 	@Column(name = "employee_name")
 	private String employeeName;
-	
+
 	private String email;
-	
+
 	private String phone;
-	
-	@Column(name="designation_id")
+
+	@Column(name = "designation_id")
 	private Integer designationId;
-	
+
+	@Column(name = "department_id")
 	private Integer departmentId;
-	
-	@Column(name="location_id")
+
+	@Column(name = "location_id")
 	private Integer location_Id;
-	
-	@Column(name="date_of_joining")
+
+	@Column(name = "total_experience_years")
+	private Double totalExperienceYears;
+
+	@Column(name = "date_of_joining")
 	private Date doj;
-	
-	@Column(name="employment_status")
+
+	@Column(name = "employment_status")
 	private String employmentStatus;
-	
-	@Column(name="source_system")
+
+	@Column(name = "source_system")
 	private String sourceSystem;
-	
-	@Column(name="erp_employee_id")
+
+	@Column(name = "erp_employee_id")
 	private String erpEmpID;
-	
-	@Column(name="erp_last_synced_at")
+
+	@Column(name = "erp_last_synced_at")
 	private LocalDateTime erpLastSyncedAt;
-	
-	@Column(name="created_at",updatable = false)
+
+	@Column(name = "created_at", updatable = false)
 	@CreationTimestamp
-	 private LocalDateTime createdAt;
-	
-	@Column(name="updated_at")
+	private LocalDateTime createdAt;
+
+	@Column(name = "updated_at")
 	@UpdateTimestamp
 	private LocalDateTime updatedAt;
 
@@ -65,10 +72,10 @@ public class Employees implements Serializable {
 	public String toString() {
 		return "Employees [employeeId=" + employeeId + ", employeeCode=" + employeeCode + ", employeeName="
 				+ employeeName + ", email=" + email + ", phone=" + phone + ", designationId=" + designationId
-				+ ", departmentId=" + departmentId + ", location_Id=" + location_Id + ", doj=" + doj
-				+ ", employmentStatus=" + employmentStatus + ", sourceSystem=" + sourceSystem + ", erpEmpID=" + erpEmpID
-				+ ", erpLastSyncedAt=" + erpLastSyncedAt + ", createdAt=" + createdAt + ", updatedAt=" + updatedAt
-				+ "]";
+				+ ", departmentId=" + departmentId + ", location_Id=" + location_Id + ", totalExperienceYears="
+				+ totalExperienceYears + ", doj=" + doj + ", employmentStatus=" + employmentStatus
+				+ ", sourceSystem=" + sourceSystem + ", erpEmpID=" + erpEmpID + ", erpLastSyncedAt="
+				+ erpLastSyncedAt + ", createdAt=" + createdAt + ", updatedAt=" + updatedAt + "]";
 	}
 
 	public Integer getEmployeeId() {
@@ -133,6 +140,14 @@ public class Employees implements Serializable {
 
 	public void setLocation_Id(Integer location_Id) {
 		this.location_Id = location_Id;
+	}
+
+	public Double getTotalExperienceYears() {
+		return totalExperienceYears;
+	}
+
+	public void setTotalExperienceYears(Double totalExperienceYears) {
+		this.totalExperienceYears = totalExperienceYears;
 	}
 
 	public Date getDoj() {
