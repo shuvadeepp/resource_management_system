@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.ManyToAny;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -25,20 +24,23 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+
 @Entity
-@Table(name="employees")
+@Table(name = "employees")
 @JsonPropertyOrder({
+
     "employeeCode", "name", "designation", "department",
     "skills", "totalExperienceYears",
     "availabilityStatus", "availableFrom"
 })
 public class Employees implements Serializable {
-	
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@JsonIgnore
-	@Column(name="employee_id")
-	private Integer empId;
+	@Column(name = "employee_id")
+	private Integer employeeId;
+
 	
 	@Column(name="employee_code")
 	private String employeeCode;
@@ -48,18 +50,21 @@ public class Employees implements Serializable {
 	@JsonIgnore
 	private String email;
 	@JsonIgnore
+
+	
 	private String phone;
-	
+
 	@Column(name = "total_experience_years")
-	private Integer totalExperienceYears;
-	
+	private Double totalExperienceYears;
+
 	@ManyToOne
-	@JoinColumn(name="designation_id")
+	@JoinColumn(name = "designation_id")
 	private Designation designation;
-	
+
 	@ManyToOne
-	@JoinColumn(name="department_id")
+	@JoinColumn(name = "department_id")
 	private Departments department;
+
 	
 	@OneToMany(mappedBy = "employee")
 	private List<ResourceAvailability> resourceAvailability = new ArrayList<>();
@@ -117,13 +122,37 @@ public class Employees implements Serializable {
     public List<EmployeeSkill> getSkills() {
         return employeeSkill;
     }
-	public Integer getEmpId() {
-		return empId;
-	}
+	
 
-	public void setEmpId(Integer empId) {
-		this.empId = empId;
-	}
+	@ManyToOne
+	@JoinColumn(name = "location_id")
+	private Location location;
+
+	@Column(name = "date_of_joining")
+	private Date doj;
+
+	@Column(name = "employment_status")
+	private String employmentStatus;
+
+	@Column(name = "source_system")
+	private String sourceSystem;
+
+	@Column(name = "erp_employee_id")
+	private String erpEmpID;
+
+	@Column(name = "erp_last_synced_at")
+	private LocalDateTime erpLastSyncedAt;
+
+	@Column(name = "created_at", updatable = false)
+	@CreationTimestamp
+	private LocalDateTime createdAt;
+
+	@Column(name = "updated_at")
+	@UpdateTimestamp
+	private LocalDateTime updatedAt;
+
+	
+
 
 	public String getEmployeeCode() {
 		return employeeCode;
@@ -133,49 +162,46 @@ public class Employees implements Serializable {
 		this.employeeCode = employeeCode;
 	}
 
-	public String getName() {
-		return name;
-	}
+	public String getName() { return name; }
+	public void setName(String name) { this.name = name; }
 
-	public void setName(String name) {
-		this.name = name;
-	}
+	public String getEmail() { return email; }
+	public void setEmail(String email) { this.email = email; }
 
-	public String getEmail() {
-		return email;
-	}
 
-	public void setEmail(String email) {
-		this.email = email;
-	}
+	public String getPhone() { return phone; }
+	public void setPhone(String phone) { this.phone = phone; }
 
-	public String getPhone() {
-		return phone;
-	}
+	public Double getTotalExperienceYears() { return totalExperienceYears; }
+	public void setTotalExperienceYears(Double totalExperienceYears) { this.totalExperienceYears = totalExperienceYears; }
 
-	public void setPhone(String phone) {
-		this.phone = phone;
-	}
+	public Designation getDesignation() { return designation; }
+	public void setDesignation(Designation designation) { this.designation = designation; }
 
-	public Integer getTotalExperienceYears() {
-		return totalExperienceYears;
-	}
+	public Departments getDepartment() { return department; }
+	
 
-	public void setTotalExperienceYears(Integer totalExperienceYears) {
-		this.totalExperienceYears = totalExperienceYears;
-	}
+	public Location getLocation() { return location; }
+	public void setLocation(Location location) { this.location = location; }
 
-	public Designation getDesignation() {
-		return designation;
-	}
+	public Date getDoj() { return doj; }
+	public void setDoj(Date doj) { this.doj = doj; }
 
-	public void setDesignation(Designation designation) {
-		this.designation = designation;
-	}
+	public String getEmploymentStatus() { return employmentStatus; }
+	public void setEmploymentStatus(String employmentStatus) { this.employmentStatus = employmentStatus; }
 
-	public Departments getDepartment() {
-		return department;
-	}
+	public String getSourceSystem() { return sourceSystem; }
+	public void setSourceSystem(String sourceSystem) { this.sourceSystem = sourceSystem; }
+
+	public String getErpEmpID() { return erpEmpID; }
+	public void setErpEmpID(String erpEmpID) { this.erpEmpID = erpEmpID; }
+
+	public LocalDateTime getErpLastSyncedAt() { return erpLastSyncedAt; }
+	public void setErpLastSyncedAt(LocalDateTime erpLastSyncedAt) { this.erpLastSyncedAt = erpLastSyncedAt; }
+
+	public LocalDateTime getCreatedAt() { return createdAt; }
+	public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
 
 	public void setDepartment(Departments department) {
 		this.department = department;
@@ -199,5 +225,31 @@ public class Employees implements Serializable {
 //	private Set<EmployeeSkill> skills = new HashSet<>();
 
 	
+	
+
+
+	public LocalDateTime getUpdatedAt() { return updatedAt; }
+	public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+	public Integer getEmployeeId() {
+		return employeeId;
+	}
+
+	public void setEmployeeId(Integer employeeId) {
+		this.employeeId = employeeId;
+	}
+
+	@Override
+	public String toString() {
+		return "Employees [employeeId=" + employeeId + ", employeeCode=" + employeeCode + ", name=" + name + ", email="
+				+ email + ", phone=" + phone + ", totalExperienceYears=" + totalExperienceYears + ", designation="
+				+ designation + ", department=" + department + ", resourceAvailability=" + resourceAvailability
+				+ ", employeeSkill=" + employeeSkill + ", location=" + location + ", doj=" + doj + ", employmentStatus="
+				+ employmentStatus + ", sourceSystem=" + sourceSystem + ", erpEmpID=" + erpEmpID + ", erpLastSyncedAt="
+				+ erpLastSyncedAt + ", createdAt=" + createdAt + ", updatedAt=" + updatedAt + "]";
+	}
+
+	
+
 	
 }

@@ -35,7 +35,6 @@ public class Skill {
 		return skillName;
 	}
 
-
 	public void setSkillName(String skillName) {
 		this.skillName = skillName;
 	}

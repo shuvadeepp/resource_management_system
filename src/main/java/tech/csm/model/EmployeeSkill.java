@@ -23,7 +23,19 @@ public class EmployeeSkill {
     @JoinColumn(name = "employee_id")
     private Employees employee;
 
-    @Column(name = "skill_priority")
+    private Integer isActive;
+   
+    
+    public Integer getIsActive() {
+		return isActive;
+	}
+
+	public void setIsActive(Integer isActive) {
+		this.isActive = isActive;
+	}
+
+
+	@Column(name = "skill_priority")
     private String skillPriority;
 
     @Column(name = "proficiency_level")
@@ -80,6 +92,7 @@ public class EmployeeSkill {
 	}
 
 
+
 	public void setSkillPriority(String skillPriority) {
 		this.skillPriority = skillPriority;
 	}
@@ -88,6 +101,9 @@ public class EmployeeSkill {
 	public String getProficiencyLevel() {
 		return proficiencyLevel;
 	}
+
+
+   
 
 
 	public void setProficiencyLevel(String proficiencyLevel) {
