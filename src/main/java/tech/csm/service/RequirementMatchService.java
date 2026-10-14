@@ -89,14 +89,13 @@ public class RequirementMatchService {
             }
 
             result.add(new EmployeeProfile(
-                    emp.getEmployeeId(),
-                    emp.getEmployeeCode(),
-                    emp.getEmployeeName(),
-                    emp.getDesignationId(),
-                    emp.getDepartmentId(),
-                    emp.getLocation_Id(),
+            		emp.getEmpId(),
+                    emp.getEmployeeId(), 
+                    emp.getName(),                    
+                    emp.getDesignation().getDesignationId(),
+                    emp.getDepartment().getDepartmentId(),
+                    emp.getLocation().getLocationId(),
                     emp.getTotalExperienceYears(),
-                    emp.getEmploymentStatus(),
                     skills));
         }
         return result;

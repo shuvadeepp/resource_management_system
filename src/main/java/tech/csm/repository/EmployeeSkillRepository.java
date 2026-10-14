@@ -10,5 +10,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface EmployeeSkillRepository extends JpaRepository<EmployeeSkill, Integer> {
-	List<EmployeeSkill> findByEmployeeIdAndIsActiveTrue(Integer employeeId);
+	List<EmployeeSkill> findByEmployeeIdAndIsActiveTrue(String string);
 }
