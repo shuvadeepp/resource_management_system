@@ -48,11 +48,11 @@ public class RequirementService {
         Map<RequiredSkillRequest, Skill> resolved = new LinkedHashMap<>();
         List<String> missing = new ArrayList<>();
 
-        for (RequiredSkillRequest rs : request.requiredSkills()) {
-            skillRepository.findBySkillNameIgnoreCase(rs.skillName().trim())
+        for (RequiredSkillRequest rs : request.getRequiredSkills()) {
+            skillRepository.findBySkillNameIgnoreCase(rs.getSkillName().trim())
                     .ifPresentOrElse(
                             skill -> resolved.put(rs, skill),
-                            () -> missing.add(rs.skillName()));
+                            () -> missing.add(rs.getSkillName()));
         }
         if (!missing.isEmpty()) {
             throw new SkillNotFoundException(missing);
@@ -60,31 +60,31 @@ public class RequirementService {
 
         // 2. Requirement save (existing project_requirements table ke columns)
         ProjectRequirement pr = new ProjectRequirement();
-        pr.setProjectId(request.projectId() != null ? request.projectId() : defaultProjectId);
+        pr.setProjectId(request.getProjectId() != null ? request.getProjectId() : defaultProjectId);
         pr.setRequirementCode(
-                request.projectCode() != null && !request.projectCode().isBlank()
-                        ? request.projectCode()
+                request.getProjectCode() != null && !request.getProjectCode().isBlank()
+                        ? request.getProjectCode()
                         : "REQ-" + System.currentTimeMillis());
-        pr.setRoleName(request.projectName());
-        pr.setRoleDescription(request.description());
-        pr.setProjectDurationMonths(request.durationMonths());
-        pr.setLocation(request.location());
+        pr.setRoleName(request.getProjectName());
+        pr.setRoleDescription(request.getDescription());
+        pr.setProjectDurationMonths(request.getDurationMonths());
+        pr.setLocation(request.getLocation());
 
-        if (request.workMode() != null) {
-            pr.setWorkMode(request.workMode().trim().toUpperCase());
+        if (request.getWorkMode() != null) {
+            pr.setWorkMode(request.getWorkMode().trim().toUpperCase());
         }
-        if (request.priority() != null) {
-            pr.setRequirementPriority(request.priority().trim().toUpperCase());
+        if (request.getPriority() != null) {
+            pr.setRequirementPriority(request.getPriority().trim().toUpperCase());
         }
-        if (request.headcount() != null) {
-            pr.setRequiredHeadcount(request.headcount());
+        if (request.getHeadcount() != null) {
+            pr.setRequiredHeadcount(request.getHeadcount());
         }
-        if (request.minimumExperienceYears() != null) {
+        if (request.getMinimumExperienceYears() != null) {
             pr.setMinimumExperienceMonths(
-                    request.minimumExperienceYears().multiply(BigDecimal.valueOf(12)).intValue());
+                    request.getMinimumExperienceYears().multiply(BigDecimal.valueOf(12)).intValue());
         }
 
-        pr.setJoiningDate(request.joiningDate());
+        pr.setJoiningDate(request.getJoiningDate());
         pr.setRequirementOwner(defaultRequirementOwner);
         pr = requirementRepository.save(pr);
 
@@ -94,8 +94,8 @@ public class RequirementService {
             RequiredSkill rs = new RequiredSkill();
             rs.setRequirementId(pr.getRequirementId());
             rs.setSkillId(e.getValue().getSkillId());
-            rs.setIsMandatory(e.getKey().mandatory());
-            rs.setMinimumProficiency(e.getKey().minimumProficiency());
+            rs.setIsMandatory(e.getKey().getMandatory());
+            rs.setMinimumProficiency(e.getKey().getMinimumProficiency());
             toSave.add(rs);
         }
         requiredSkillRepository.saveAll(toSave);

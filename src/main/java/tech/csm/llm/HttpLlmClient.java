@@ -42,7 +42,7 @@ public class HttpLlmClient implements LlmClient {
 
     @Override
     public JsonNode analyze(LlmPayload payload) {
-        LlmRequest body = toLlmRequest(payload.requirement());
+        LlmRequest body = toLlmRequest(payload.getRequirement());
         try {
             return restClient.post()
                     .contentType(MediaType.APPLICATION_JSON)
@@ -58,15 +58,15 @@ public class HttpLlmClient implements LlmClient {
 
     private LlmRequest toLlmRequest(RequirementRequest req) {
         List<LlmRequest.Skill> skills = new ArrayList<>();
-        for (RequiredSkillRequest rs : req.requiredSkills()) {
-            skills.add(new LlmRequest.Skill(rs.skillName(), rs.mandatory(), rs.minimumProficiency()));
+        for (RequiredSkillRequest rs : req.getRequiredSkills()) {
+            skills.add(new LlmRequest.Skill(rs.getSkillName(), rs.getMandatory(), rs.getMinimumProficiency()));
         }
 
         LlmRequest.Requirement requirement = new LlmRequest.Requirement(
-                req.projectName(),
+                req.getProjectName(),
                 skills,
-                req.minimumExperienceYears(),
-                req.joiningDate() != null ? req.joiningDate().toString() : null);
+                req.getMinimumExperienceYears(),
+                req.getJoiningDate() != null ? req.getJoiningDate().toString() : null);
 
         return new LlmRequest(requirement);
     }
