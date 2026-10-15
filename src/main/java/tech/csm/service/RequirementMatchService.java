@@ -1,10 +1,7 @@
 package tech.csm.service;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,8 +19,6 @@ import tech.csm.model.ProjectRequirement;
 import tech.csm.model.Skill;
 import tech.csm.repository.EmployeeSkillRepository;
 import tech.csm.repository.EmployeesRepository;
-import tech.csm.repository.SkillRepository;
-
 import tools.jackson.databind.JsonNode;
 
 @Service
@@ -34,24 +29,21 @@ public class RequirementMatchService {
     private final RequirementService requirementService;
     private final EmployeesRepository employeesRepository;
     private final EmployeeSkillRepository employeeSkillRepository;
-    private final SkillRepository skillRepository;
     private final LlmClient llmClient;
 
     public RequirementMatchService(RequirementService requirementService,
                                    EmployeesRepository employeesRepository,
                                    EmployeeSkillRepository employeeSkillRepository,
-                                   SkillRepository skillRepository,
                                    LlmClient llmClient) {
         this.requirementService = requirementService;
         this.employeesRepository = employeesRepository;
         this.employeeSkillRepository = employeeSkillRepository;
-        this.skillRepository = skillRepository;
         this.llmClient = llmClient;
     }
 
     public RequirementResponse createAndMatch(RequirementRequest request) {
 
-        // 1. DB mein save (alag transaction, LLM call se pehle commit ho jata hai)
+        // 1. DB mein save
         ProjectRequirement saved = requirementService.save(request);
 
         // 2. DB se employees + skills
@@ -59,7 +51,6 @@ public class RequirementMatchService {
 
         // 3. LLM call. Fail hua to bhi requirement saved rehti hai
         LlmPayload payload = new LlmPayload(saved.getRequirementId(), request, employees);
-        // String llmResult;
         JsonNode llmResult;
         String message;
         try {
@@ -76,24 +67,19 @@ public class RequirementMatchService {
     }
 
     private List<EmployeeProfile> buildEmployeeProfiles() {
-        Map<Integer, String> skillNames = new HashMap<>();
-        for (Skill s : skillRepository.findAll()) {
-            skillNames.put(s.getSkillId(), s.getSkillName());
-        }
-
         List<EmployeeProfile> result = new ArrayList<>();
 
         for (Employees emp : employeesRepository.findAll()) {
 
             List<EmployeeSkillProfile> skills = new ArrayList<>();
             for (EmployeeSkill es : employeeSkillRepository
-                    .findByEmployeeIdAndIsActiveTrue(emp.getEmpId())) {
-                skills.add(toSkillProfile(es, skillNames));
+                    .findByEmployee_EmpIdAndIsActive(emp.getEmployeeId(), 1)) {
+                skills.add(toSkillProfile(es));
             }
 
-            result.add(new EmployeeProfile(
-                    emp.getEmpId(),
+            result.add(new EmployeeProfile(     
                     emp.getEmployeeId(),
+                    emp.getEmployeeCode(),
                     emp.getName(),
                     emp.getDesignation() != null ? emp.getDesignation().getDesignationId() : null,
                     emp.getDepartment() != null ? emp.getDepartment().getDepartmentId() : null,
@@ -104,12 +90,13 @@ public class RequirementMatchService {
         return result;
     }
 
-    private EmployeeSkillProfile toSkillProfile(EmployeeSkill es, Map<Integer, String> skillNames) {
+    private EmployeeSkillProfile toSkillProfile(EmployeeSkill es) {
+        Skill skill = es.getSkill();
         return new EmployeeSkillProfile(
-                es.getSkillId(),
-                skillNames.get(es.getSkillId()),
-                Objects.toString(es.getProficiencyLevel(), null),
+                skill != null ? skill.getSkillId() : null,
+                skill != null ? skill.getSkillName() : null,
+                es.getProficiencyLevel(),
                 es.getExperienceMonths(),
-                Objects.toString(es.getValidationStatus(), null));
+                es.getValidationStatus());
     }
 }

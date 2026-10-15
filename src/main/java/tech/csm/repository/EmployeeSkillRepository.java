@@ -10,6 +10,6 @@ import tech.csm.model.EmployeeSkill;
 @Repository
 public interface EmployeeSkillRepository extends JpaRepository<EmployeeSkill, Integer> {
 
-    List<EmployeeSkill> findByEmployeeIdAndIsActiveTrue(Integer employeeId);
+	List<EmployeeSkill> findByEmployee_EmpIdAndIsActive(Integer empId, Integer isActive);
  
 }
