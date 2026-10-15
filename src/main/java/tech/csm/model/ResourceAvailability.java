@@ -19,7 +19,7 @@ public class ResourceAvailability {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@Column(name="availability_id")
-	private String availabilityId;
+	private Integer availabilityId;
 	
 
 	@Column(name="availability_status")
@@ -41,11 +41,11 @@ public class ResourceAvailability {
 		this.employee = employee;
 	}
 
-	public String getAvailabilityId() {
+	public Integer getAvailabilityId() {
 		return availabilityId;
 	}
 
-	public void setAvailabilityId(String availabilityId) {
+	public void setAvailabilityId(Integer availabilityId) {
 		this.availabilityId = availabilityId;
 	}
 
