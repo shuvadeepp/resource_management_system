@@ -129,26 +129,33 @@ public class Employees implements Serializable {
 	private Location location;
 
 	@Column(name = "date_of_joining")
+	@JsonIgnore
 	private Date doj;
 
 	@Column(name = "employment_status")
+	@JsonIgnore
 	private String employmentStatus;
 
 	@Column(name = "source_system")
+	@JsonIgnore
 	private String sourceSystem;
 
 	@Column(name = "erp_employee_id")
+	@JsonIgnore
 	private String erpEmpID;
 
 	@Column(name = "erp_last_synced_at")
+	@JsonIgnore
 	private LocalDateTime erpLastSyncedAt;
 
 	@Column(name = "created_at", updatable = false)
 	@CreationTimestamp
+	@JsonIgnore
 	private LocalDateTime createdAt;
 
 	@Column(name = "updated_at")
 	@UpdateTimestamp
+	@JsonIgnore
 	private LocalDateTime updatedAt;
 
 	
@@ -180,7 +187,7 @@ public class Employees implements Serializable {
 
 	public Departments getDepartment() { return department; }
 	
-
+	@JsonIgnore
 	public Location getLocation() { return location; }
 	public void setLocation(Location location) { this.location = location; }
 
