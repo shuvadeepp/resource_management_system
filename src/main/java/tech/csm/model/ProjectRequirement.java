@@ -1,10 +1,14 @@
 package tech.csm.model;
- 
 
-import jakarta.persistence.*;
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "project_requirements")
@@ -15,92 +19,101 @@ public class ProjectRequirement {
     @Column(name = "requirement_id")
     private Integer requirementId;
 
-    @Column(name = "project_name")
-    private String projectName;
+    @Column(name = "project_id")
+    private Integer projectId;
 
-    @Column(name = "project_code")
-    private String projectCode;
+    @Column(name = "requirement_code")
+    private String requirementCode;
 
-    @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "role_name")
+    private String roleName;
 
-    @Column(name = "business_domain")
-    private String businessDomain;
+    @Column(name = "role_description", columnDefinition = "TEXT")
+    private String roleDescription;
 
-    @Column(name = "location_id")
-    private Integer locationId;
+    @Column(name = "required_headcount")
+    private Integer requiredHeadcount = 1;
 
-    @Column(name = "work_mode")
-    private String workMode;
+    @Column(name = "minimum_proficiency_level")
+    private Integer minimumProficiencyLevel = 3;
 
-    @Column(name = "duration_months")
-    private Integer durationMonths;
-
-    @Column(name = "headcount")
-    private Integer headcount;
-
-    @Column(name = "priority")
-    private String priority;
-
-    @Column(name = "minimum_experience_years")
-    private BigDecimal minimumExperienceYears;
+    @Column(name = "minimum_experience_months")
+    private Integer minimumExperienceMonths = 0;
 
     @Column(name = "joining_date")
     private LocalDate joiningDate;
 
-    @Column(name = "status")
-    private String status;
+    @Column(name = "availability_within_days")
+    private Integer availabilityWithinDays = 15;
 
-    @Column(name = "created_at")
+    @Column(name = "project_duration_months")
+    private Integer projectDurationMonths;
+
+    @Column(name = "location")
+    private String location;
+
+    @Column(name = "work_mode")
+    private String workMode = "AS_REQUIRED";
+
+    @Column(name = "requirement_priority")
+    private String requirementPriority = "MEDIUM";
+
+    @Column(name = "requirement_owner")
+    private Integer requirementOwner;
+
+    @Column(name = "requirement_status")
+    private String status = "DRAFT";
+
+    @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @PrePersist
-    void onCreate() {
-        if (status == null) status = "DRAFT";
-        if (createdAt == null) createdAt = LocalDateTime.now();
-    }
-
-    public ProjectRequirement() {}
-
     public Integer getRequirementId() { return requirementId; }
-    public void setRequirementId(Integer requirementId) { this.requirementId = requirementId; }
+    public void setRequirementId(Integer v) { this.requirementId = v; }
 
-    public String getProjectName() { return projectName; }
-    public void setProjectName(String projectName) { this.projectName = projectName; }
+    public Integer getProjectId() { return projectId; }
+    public void setProjectId(Integer v) { this.projectId = v; }
 
-    public String getProjectCode() { return projectCode; }
-    public void setProjectCode(String projectCode) { this.projectCode = projectCode; }
+    public String getRequirementCode() { return requirementCode; }
+    public void setRequirementCode(String v) { this.requirementCode = v; }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public String getRoleName() { return roleName; }
+    public void setRoleName(String v) { this.roleName = v; }
 
-    public String getBusinessDomain() { return businessDomain; }
-    public void setBusinessDomain(String businessDomain) { this.businessDomain = businessDomain; }
+    public String getRoleDescription() { return roleDescription; }
+    public void setRoleDescription(String v) { this.roleDescription = v; }
 
-    public Integer getLocationId() { return locationId; }
-    public void setLocationId(Integer locationId) { this.locationId = locationId; }
+    public Integer getRequiredHeadcount() { return requiredHeadcount; }
+    public void setRequiredHeadcount(Integer v) { this.requiredHeadcount = v; }
 
-    public String getWorkMode() { return workMode; }
-    public void setWorkMode(String workMode) { this.workMode = workMode; }
+    public Integer getMinimumProficiencyLevel() { return minimumProficiencyLevel; }
+    public void setMinimumProficiencyLevel(Integer v) { this.minimumProficiencyLevel = v; }
 
-    public Integer getDurationMonths() { return durationMonths; }
-    public void setDurationMonths(Integer durationMonths) { this.durationMonths = durationMonths; }
-
-    public Integer getHeadcount() { return headcount; }
-    public void setHeadcount(Integer headcount) { this.headcount = headcount; }
-
-    public String getPriority() { return priority; }
-    public void setPriority(String priority) { this.priority = priority; }
-
-    public BigDecimal getMinimumExperienceYears() { return minimumExperienceYears; }
-    public void setMinimumExperienceYears(BigDecimal minimumExperienceYears) { this.minimumExperienceYears = minimumExperienceYears; }
+    public Integer getMinimumExperienceMonths() { return minimumExperienceMonths; }
+    public void setMinimumExperienceMonths(Integer v) { this.minimumExperienceMonths = v; }
 
     public LocalDate getJoiningDate() { return joiningDate; }
-    public void setJoiningDate(LocalDate joiningDate) { this.joiningDate = joiningDate; }
+    public void setJoiningDate(LocalDate v) { this.joiningDate = v; }
+
+    public Integer getAvailabilityWithinDays() { return availabilityWithinDays; }
+    public void setAvailabilityWithinDays(Integer v) { this.availabilityWithinDays = v; }
+
+    public Integer getProjectDurationMonths() { return projectDurationMonths; }
+    public void setProjectDurationMonths(Integer v) { this.projectDurationMonths = v; }
+
+    public String getLocation() { return location; }
+    public void setLocation(String v) { this.location = v; }
+
+    public String getWorkMode() { return workMode; }
+    public void setWorkMode(String v) { this.workMode = v; }
+
+    public String getRequirementPriority() { return requirementPriority; }
+    public void setRequirementPriority(String v) { this.requirementPriority = v; }
+
+    public Integer getRequirementOwner() { return requirementOwner; }
+    public void setRequirementOwner(Integer v) { this.requirementOwner = v; }
 
     public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public void setStatus(String v) { this.status = v; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

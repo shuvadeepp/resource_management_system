@@ -73,7 +73,7 @@ public class RequirementMatchService {
 
             List<EmployeeSkillProfile> skills = new ArrayList<>();
             for (EmployeeSkill es : employeeSkillRepository
-                    .findByEmployee_EmpIdAndIsActive(emp.getEmployeeId(), 1)) {
+                    .findByEmployee_employeeIdAndIsActive(emp.getEmployeeId(), 1)) {
                 skills.add(toSkillProfile(es));
             }
 
