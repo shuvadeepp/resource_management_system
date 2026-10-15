@@ -9,7 +9,7 @@ import tech.csm.dto.RequirementResponse;
 import tech.csm.service.RequirementMatchService;
 
 @RestController
-@RequestMapping("/api/requirements")
+@RequestMapping("/api")
 public class RequirementController {
 
     private final RequirementMatchService requirementMatchService;
@@ -18,7 +18,7 @@ public class RequirementController {
         this.requirementMatchService = requirementMatchService;
     }
 
-    @PostMapping
+    @PostMapping("/requirements")
     public ResponseEntity<RequirementResponse> create(@Valid @RequestBody RequirementRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(requirementMatchService.createAndMatch(request));
