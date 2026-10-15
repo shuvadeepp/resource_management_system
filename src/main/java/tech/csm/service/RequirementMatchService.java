@@ -24,6 +24,8 @@ import tech.csm.repository.EmployeeSkillRepository;
 import tech.csm.repository.EmployeesRepository;
 import tech.csm.repository.SkillRepository;
 
+import tools.jackson.databind.JsonNode;
+
 @Service
 public class RequirementMatchService {
 
@@ -57,7 +59,8 @@ public class RequirementMatchService {
 
         // 3. LLM call. Fail hua to bhi requirement saved rehti hai
         LlmPayload payload = new LlmPayload(saved.getRequirementId(), request, employees);
-        String llmResult;
+        // String llmResult;
+        JsonNode llmResult;
         String message;
         try {
             llmResult = llmClient.analyze(payload);
@@ -84,17 +87,17 @@ public class RequirementMatchService {
 
             List<EmployeeSkillProfile> skills = new ArrayList<>();
             for (EmployeeSkill es : employeeSkillRepository
-                    .findByEmployeeIdAndIsActiveTrue(emp.getEmployeeId())) {
+                    .findByEmployeeIdAndIsActiveTrue(emp.getEmpId())) {
                 skills.add(toSkillProfile(es, skillNames));
             }
 
             result.add(new EmployeeProfile(
-            		emp.getEmpId(),
-                    emp.getEmployeeId(), 
-                    emp.getName(),                    
-                    emp.getDesignation().getDesignationId(),
-                    emp.getDepartment().getDepartmentId(),
-                    emp.getLocation().getLocationId(),
+                    emp.getEmpId(),
+                    emp.getEmployeeId(),
+                    emp.getName(),
+                    emp.getDesignation() != null ? emp.getDesignation().getDesignationId() : null,
+                    emp.getDepartment() != null ? emp.getDepartment().getDepartmentId() : null,
+                    emp.getLocation() != null ? emp.getLocation().getLocationId() : null,
                     emp.getTotalExperienceYears(),
                     skills));
         }

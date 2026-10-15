@@ -10,7 +10,7 @@ public record EmployeeProfile(
         @JsonProperty("employee_name") String employeeName,
         @JsonProperty("designation_id") Long designationId,
         @JsonProperty("department_id") Integer departmentId,
-        @JsonProperty("location_id") Long locationId,
+        @JsonProperty("location_id") Integer locationId,
         @JsonProperty("total_experience_years") Double totalExperienceYears,
         @JsonProperty("skills") List<EmployeeSkillProfile> skills
 ) {}
