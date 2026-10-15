@@ -1,8 +1,13 @@
 package tech.csm.service;
- 
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import tech.csm.dto.RequiredSkillRequest;
 import tech.csm.dto.RequirementRequest;
 import tech.csm.exception.SkillNotFoundException;
@@ -12,11 +17,6 @@ import tech.csm.model.Skill;
 import tech.csm.repository.ProjectRequirementRepository;
 import tech.csm.repository.RequiredSkillRepository;
 import tech.csm.repository.SkillRepository;
-
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 @Service
 public class RequirementService {
@@ -65,15 +65,18 @@ public class RequirementService {
         pr.setJoiningDate(request.joiningDate());
         pr = requirementRepository.save(pr);
 
-        // 3. Required skills save
+        // 3. Required skills save (har skill ke liye naya object, PK set nahi karni)
+        List<RequiredSkill> toSave = new ArrayList<>();
         for (Map.Entry<RequiredSkillRequest, Skill> e : resolved.entrySet()) {
             RequiredSkill rs = new RequiredSkill();
-            rs.setRequirementId(pr.getRequirementId());
+            rs.setRequirementId(pr.getRequirementId());   // FIX: pehle setRequiredSkillId tha
             rs.setSkillId(e.getValue().getSkillId());
             rs.setIsMandatory(e.getKey().mandatory());
             rs.setMinimumProficiency(e.getKey().minimumProficiency());
-            requiredSkillRepository.save(rs);
+            toSave.add(rs);
         }
+        requiredSkillRepository.saveAll(toSave);
+
         return pr;
     }
 }

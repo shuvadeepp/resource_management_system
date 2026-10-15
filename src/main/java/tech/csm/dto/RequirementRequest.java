@@ -25,7 +25,7 @@ public record RequirementRequest(
         @JsonProperty("project_code") String projectCode,
         @JsonProperty("description") String description,
         @JsonProperty("business_domain") String businessDomain,
-        @JsonProperty("location_id") Long locationId,
+        @JsonProperty("location_id") Integer locationId,
         @JsonProperty("work_mode") String workMode,
         @JsonProperty("duration_months") Integer durationMonths,
         @JsonProperty("headcount") Integer headcount,

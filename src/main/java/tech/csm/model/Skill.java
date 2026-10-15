@@ -14,19 +14,19 @@ public class Skill {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "skill_id")
     @JsonIgnore
-    private Long skillId;
+    private Integer skillId;
 
     
     @Column(name = "skill_name")
     private String skillName;
 
 
-	public Long getSkillId() {
+	public Integer getSkillId() {
 		return skillId;
 	}
 
 
-	public void setSkillId(Long skillId) {
+	public void setSkillId(Integer skillId) {
 		this.skillId = skillId;
 	}
 
@@ -40,6 +40,6 @@ public class Skill {
 	}
 
     
-
+	
    
 }

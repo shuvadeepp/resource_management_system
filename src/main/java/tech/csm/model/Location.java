@@ -10,7 +10,7 @@ public class Location {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "location_id")
-    private Long locationId;
+    private Integer locationId;
 
     @Column(name = "location_name")
     private String locationName;
@@ -29,8 +29,8 @@ public class Location {
 
     public Location() {}
 
-    public Long getLocationId() { return locationId; }
-    public void setLocationId(Long locationId) { this.locationId = locationId; }
+    public Integer getLocationId() { return locationId; }
+    public void setLocationId(Integer locationId) { this.locationId = locationId; }
 
     public String getLocationName() { return locationName; }
     public void setLocationName(String locationName) { this.locationName = locationName; }

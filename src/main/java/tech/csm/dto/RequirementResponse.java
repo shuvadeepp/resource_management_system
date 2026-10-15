@@ -1,6 +1,7 @@
 package tech.csm.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import tools.jackson.databind.JsonNode;
 
 public record RequirementResponse(
         @JsonProperty("status") String status,
@@ -8,5 +9,5 @@ public record RequirementResponse(
         @JsonProperty("requirement_id") Integer requirementId,
         @JsonProperty("requirement_status") String requirementStatus,
         @JsonProperty("employees_sent") int employeesSent,
-        @JsonProperty("llm_result") String llmResult
+        @JsonProperty("llm_result") JsonNode llmResult
 ) {}
