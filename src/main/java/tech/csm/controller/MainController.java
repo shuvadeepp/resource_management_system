@@ -21,6 +21,14 @@ public class MainController {
 	@Autowired
 	private EmployeesRepository employeesRepository;
 	
+	@Autowired
+	private tech.csm.llm.GeminiLlmClient geminiLlmClient;
+	
+	@GetMapping("/llm/test")
+	public ResponseEntity<String> testLlm(@org.springframework.web.bind.annotation.RequestParam(defaultValue = "Say hello in one line") String q) {
+	    return ResponseEntity.ok(geminiLlmClient.ask(q));
+	}
+	
 	@GetMapping
 	public String getApi()
 	{

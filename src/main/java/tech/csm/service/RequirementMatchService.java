@@ -1,5 +1,11 @@
 package tech.csm.service;
 
+import java.util.HashMap;
+import java.util.Map;
+
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -61,9 +67,60 @@ public class RequirementMatchService {
             llmResult = null;
             message = "Requirement saved, but the LLM step failed";
         }
-
+        enrichWithEmployeeDetails(llmResult, employees);
+        
         return new RequirementResponse("success", message, saved.getRequirementId(),
                 saved.getStatus(), employees.size(), llmResult);
+    }
+    
+    private void enrichWithEmployeeDetails(JsonNode result, List<EmployeeProfile> employees) {
+	    if (result == null || !result.path("matches").isArray()
+	            || !(result.path("matches") instanceof ArrayNode matches)) {
+	        return;
+	    }
+	
+	    Map<String, EmployeeProfile> byCode = new HashMap<>();
+	    for (EmployeeProfile e : employees) {
+	        if (e.getEmployeeCode() != null) {
+	            byCode.put(e.getEmployeeCode(), e);
+	        }
+	    }
+	
+	    // keys we want after the identity block, in this order
+	    List<String> orderedKeys = List.of(
+	            "match_score", "category", "matching_skills", "below_required_proficiency",
+	            "missing_skills", "transferable_skills", "explanation", "learning_suggestions");
+	
+	    for (int i = 0; i < matches.size(); i++) {
+	        JsonNode old = matches.get(i);
+	        EmployeeProfile e = byCode.get(old.path("employee_code").textValue());
+	
+	        ObjectNode fresh = matches.objectNode();
+	
+	        // 1. identity first
+	        fresh.put("employee_code", old.path("employee_code").textValue());
+	        if (e != null) {
+	            fresh.put("resource_name", e.getEmployeeName());
+	            fresh.put("employee_id", e.getEmployeeId());
+	            fresh.put("total_experience_years", e.getTotalExperienceYears());
+	        }
+	
+	        // 2. Gemini's fields in a fixed order
+	        for (String key : orderedKeys) {
+	            if (old.has(key)) {
+	                fresh.set(key, old.get(key));
+	            }
+	        }
+	
+	        // 3. anything else Gemini returned
+	        for (String key : old.propertyNames()) {
+	            if (!fresh.has(key)) {
+	                fresh.set(key, old.get(key));
+	            }
+	        }
+	
+	        matches.set(i, fresh);
+	    }
     }
 
     private List<EmployeeProfile> buildEmployeeProfiles() {
