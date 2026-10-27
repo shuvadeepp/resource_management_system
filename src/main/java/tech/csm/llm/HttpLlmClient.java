@@ -19,7 +19,7 @@ import tech.csm.dto.LlmRequest;
 import tech.csm.dto.RequiredSkillRequest;
 import tech.csm.dto.RequirementRequest;
 
-@Component
+// @Component
 public class HttpLlmClient implements LlmClient {
 
     private static final Logger log = LoggerFactory.getLogger(HttpLlmClient.class);
@@ -42,7 +42,7 @@ public class HttpLlmClient implements LlmClient {
 
     @Override
     public JsonNode analyze(LlmPayload payload) {
-        LlmRequest body = toLlmRequest(payload.requirement());
+        LlmRequest body = toLlmRequest(payload.getRequirement());
         try {
             return restClient.post()
                     .contentType(MediaType.APPLICATION_JSON)

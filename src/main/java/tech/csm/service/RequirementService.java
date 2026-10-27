@@ -41,14 +41,18 @@ public class RequirementService {
         this.skillRepository = skillRepository;
     }
 
+    // Caller ensures project_name and joining_date are present
     @Transactional
     public ProjectRequirement save(RequirementRequest request) {
 
-        // 1. Har skill name ko skills table se match karo, nahi mila to reject
+        List<RequiredSkillRequest> requestedSkills =
+                request.requiredSkills() != null ? request.requiredSkills() : List.of();
+
+        // 1. Skill names ko skills table se match karo, nahi mila to reject
         Map<RequiredSkillRequest, Skill> resolved = new LinkedHashMap<>();
         List<String> missing = new ArrayList<>();
 
-        for (RequiredSkillRequest rs : request.requiredSkills()) {
+        for (RequiredSkillRequest rs : requestedSkills) {
             skillRepository.findBySkillNameIgnoreCase(rs.skillName().trim())
                     .ifPresentOrElse(
                             skill -> resolved.put(rs, skill),
@@ -58,7 +62,7 @@ public class RequirementService {
             throw new SkillNotFoundException(missing);
         }
 
-        // 2. Requirement save (existing project_requirements table ke columns)
+        // 2. Requirement save
         ProjectRequirement pr = new ProjectRequirement();
         pr.setProjectId(request.projectId() != null ? request.projectId() : defaultProjectId);
         pr.setRequirementCode(
@@ -88,14 +92,15 @@ public class RequirementService {
         pr.setRequirementOwner(defaultRequirementOwner);
         pr = requirementRepository.save(pr);
 
-        // 3. Required skills save (har skill ke liye naya object, PK set nahi karni)
+        // 3. Required skills save
         List<RequiredSkill> toSave = new ArrayList<>();
         for (Map.Entry<RequiredSkillRequest, Skill> e : resolved.entrySet()) {
             RequiredSkill rs = new RequiredSkill();
             rs.setRequirementId(pr.getRequirementId());
             rs.setSkillId(e.getValue().getSkillId());
-            rs.setIsMandatory(e.getKey().mandatory());
-            rs.setMinimumProficiency(e.getKey().minimumProficiency());
+            rs.setIsMandatory(e.getKey().mandatory() != null ? e.getKey().mandatory() : false);
+            rs.setMinimumProficiency(
+                    e.getKey().minimumProficiency() != null ? e.getKey().minimumProficiency() : 1);
             toSave.add(rs);
         }
         requiredSkillRepository.saveAll(toSave);
