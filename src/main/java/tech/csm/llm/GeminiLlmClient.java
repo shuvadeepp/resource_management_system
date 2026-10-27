@@ -114,20 +114,19 @@ public class GeminiLlmClient implements LlmClient {
         for (int attempt = 1; ; attempt++) {
             try {
                 return callGeminiOnce(systemPrompt, userPrompt, jsonMode);
-            } catch (RestClientResponseException ex) {
-                int status = ex.getStatusCode().value();
-                boolean retryable = status == 503 || status == 429 || status == 500;
-                if (!retryable || attempt >= maxAttempts) {
+            } catch (org.springframework.web.client.ResourceAccessException ex) {
+                if (attempt >= maxAttempts) {
                     throw ex;
                 }
-                log.warn("Gemini returned {}. Retry {}/{} after {} ms", status, attempt, maxAttempts - 1, waitMs);
+                log.warn("Gemini network error: {}. Retry {}/{} after {} ms",
+                        ex.getMessage(), attempt, maxAttempts - 1, waitMs);
                 try {
                     Thread.sleep(waitMs);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     throw ex;
                 }
-                waitMs *= 2;   // 3s, 6s, 12s
+                waitMs *= 2;
             }
         }
     }
