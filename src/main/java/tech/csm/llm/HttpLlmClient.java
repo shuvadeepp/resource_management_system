@@ -58,15 +58,15 @@ public class HttpLlmClient implements LlmClient {
 
     private LlmRequest toLlmRequest(RequirementRequest req) {
         List<LlmRequest.Skill> skills = new ArrayList<>();
-        for (RequiredSkillRequest rs : req.getRequiredSkills()) {
-            skills.add(new LlmRequest.Skill(rs.getSkillName(), rs.getMandatory(), rs.getMinimumProficiency()));
+        for (RequiredSkillRequest rs : req.requiredSkills()) {
+            skills.add(new LlmRequest.Skill(rs.skillName(), rs.mandatory(), rs.minimumProficiency()));
         }
 
         LlmRequest.Requirement requirement = new LlmRequest.Requirement(
-                req.getProjectName(),
+                req.projectName(),
                 skills,
-                req.getMinimumExperienceYears(),
-                req.getJoiningDate() != null ? req.getJoiningDate().toString() : null);
+                req.minimumExperienceYears(),
+                req.joiningDate() != null ? req.joiningDate().toString() : null);
 
         return new LlmRequest(requirement);
     }
