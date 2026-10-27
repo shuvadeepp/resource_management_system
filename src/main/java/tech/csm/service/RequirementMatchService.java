@@ -46,8 +46,37 @@ public class RequirementMatchService {
         this.employeeSkillRepository = employeeSkillRepository;
         this.llmClient = llmClient;
     }
-
+    
+    
     public RequirementResponse createAndMatch(RequirementRequest request) {
+
+        // 1. DB mein save
+        ProjectRequirement saved = requirementService.save(request);
+
+        // 2. DB se employees + skills
+        List<EmployeeProfile> employees = buildEmployeeProfiles();
+
+        // 3. LLM call. Fail hua to bhi requirement saved rehti hai
+        LlmPayload payload = new LlmPayload(saved.getRequirementId(), request, employees);
+        JsonNode llmResult;
+        String message;
+        try {
+            llmResult = llmClient.analyze(payload);
+            message = "Requirement saved and sent for matching";
+        } catch (Exception ex) {
+            log.error("LLM call failed for requirement {}", saved.getRequirementId(), ex);
+            llmResult = new tools.jackson.databind.ObjectMapper().createObjectNode()
+                    .put("error", ex.getClass().getSimpleName())
+                    .put("detail", String.valueOf(ex.getMessage()));
+            message = "Requirement saved, but the LLM step failed";
+        }
+        enrichWithEmployeeDetails(llmResult, employees);
+
+        return new RequirementResponse("success", message, saved.getRequirementId(),
+                saved.getStatus(), employees.size(), llmResult);
+    }
+
+    /*public RequirementResponse createAndMatch(RequirementRequest request) {
 
         // 1. DB mein save
         ProjectRequirement saved = requirementService.save(request);
@@ -71,7 +100,7 @@ public class RequirementMatchService {
         
         return new RequirementResponse("success", message, saved.getRequirementId(),
                 saved.getStatus(), employees.size(), llmResult);
-    }
+    }*/
     
     private void enrichWithEmployeeDetails(JsonNode result, List<EmployeeProfile> employees) {
 	    if (result == null || !result.path("matches").isArray()

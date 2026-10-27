@@ -35,7 +35,7 @@ public class MainController {
 		return "API Calling";
 	}
 	
-	@GetMapping("/emp")
+	@GetMapping("/getEmployees")
 	public ResponseEntity<?>  getAllEMployees()
 	{
 		List<Employees> employees = employeesRepository.findAll();

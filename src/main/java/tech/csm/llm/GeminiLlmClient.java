@@ -20,6 +20,10 @@ import tech.csm.dto.LlmPayload;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import java.net.http.HttpClient;
+import java.time.Duration;
+
 @Component
 public class GeminiLlmClient implements LlmClient {
 
@@ -53,9 +57,21 @@ public class GeminiLlmClient implements LlmClient {
         this.model = model;
         this.temperature = temperature;
 
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(connectTimeoutMs);
-        factory.setReadTimeout(readTimeoutMs);
+		/*
+		 * SimpleClientHttpRequestFactory factory = new
+		 * SimpleClientHttpRequestFactory();
+		 * factory.setConnectTimeout(connectTimeoutMs);
+		 * factory.setReadTimeout(readTimeoutMs);
+		 * 
+		 * this.restClient = RestClient.builder() .baseUrl(baseUrl)
+		 * .requestFactory(factory) .build();
+		 */
+        
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(connectTimeoutMs))
+                .build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
 
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
@@ -90,7 +106,117 @@ public class GeminiLlmClient implements LlmClient {
     }
 
     // ---------- core call ----------
+     
     private String callGemini(String systemPrompt, String userPrompt, boolean jsonMode) {
+        int maxAttempts = 4;
+        long waitMs = 3000;
+
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return callGeminiOnce(systemPrompt, userPrompt, jsonMode);
+            } catch (RestClientResponseException ex) {
+                int status = ex.getStatusCode().value();
+                boolean retryable = status == 503 || status == 429 || status == 500;
+                if (!retryable || attempt >= maxAttempts) {
+                    throw ex;
+                }
+                log.warn("Gemini returned {}. Retry {}/{} after {} ms", status, attempt, maxAttempts - 1, waitMs);
+                try {
+                    Thread.sleep(waitMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw ex;
+                }
+                waitMs *= 2;   // 3s, 6s, 12s
+            }
+        }
+    }
+    
+ // ---------- retry wrapper ----------
+    private String callGemini1(String systemPrompt, String userPrompt, boolean jsonMode) {
+        int maxAttempts = 4;
+        long waitMs = 3000;
+
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return callGeminiOnce(systemPrompt, userPrompt, jsonMode);
+            } catch (RestClientResponseException ex) {
+                int status = ex.getStatusCode().value();
+                boolean retryable = status == 503 || status == 429 || status == 500;
+                if (!retryable || attempt >= maxAttempts) {
+                    throw ex;
+                }
+                log.warn("Gemini returned {}. Retry {}/{} after {} ms", status, attempt, maxAttempts - 1, waitMs);
+                try {
+                    Thread.sleep(waitMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw ex;
+                }
+                waitMs *= 2;
+            }
+        }
+    }
+
+    // ---------- single call (purani body, sirf naam badla) ----------
+    private String callGeminiOnce(String systemPrompt, String userPrompt, boolean jsonMode) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("GEMINI_API_KEY is not set");
+        }
+
+        Map<String, Object> generationConfig = new LinkedHashMap<>();
+        generationConfig.put("temperature", temperature);
+        generationConfig.put("maxOutputTokens", 16384);
+        if (jsonMode) {
+            generationConfig.put("responseMimeType", "application/json");
+        }
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("systemInstruction", Map.of("parts", List.of(Map.of("text", systemPrompt))));
+        body.put("contents", List.of(Map.of("role", "user", "parts", List.of(Map.of("text", userPrompt)))));
+        body.put("generationConfig", generationConfig);
+
+        try {
+        	byte[] bytes = restClient.post()
+        	        .uri("/models/{model}:generateContent", model)
+        	        .header("x-goog-api-key", apiKey)
+        	        .contentType(MediaType.APPLICATION_JSON)
+        	        .accept(MediaType.APPLICATION_JSON)
+        	        .body(body)
+        	        .retrieve()
+        	        .body(byte[].class);
+
+        	String raw = bytes == null ? null : new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+
+            if (raw == null || raw.isBlank()) {
+                throw new IllegalStateException("Gemini returned an empty body");
+            }
+
+            JsonNode response;
+            try {
+                response = mapper.readTree(raw);
+            } catch (Exception parseEx) {
+                String preview = raw.length() > 500 ? raw.substring(0, 500) : raw;
+                log.error("Gemini reply is not JSON. First 500 chars: {}", preview);
+                throw new IllegalStateException("Reply is not JSON: " + preview);
+            }
+
+            String text = response.path("candidates").path(0)
+                    .path("content").path("parts").path(0)
+                    .path("text").textValue();
+
+            if (text == null) {
+                log.error("Gemini returned no text. Full response: {}", response);
+                throw new IllegalStateException("Gemini returned an empty response: " + response);
+            }
+            return text;
+
+        } catch (RestClientResponseException ex) {
+            log.error("Gemini API returned {} : {}", ex.getStatusCode(), ex.getResponseBodyAsString());
+            throw ex;
+        }
+    }
+   /* private String callGemini(String systemPrompt, String userPrompt, boolean jsonMode) {
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("GEMINI_API_KEY is not set");
         }
@@ -131,7 +257,7 @@ public class GeminiLlmClient implements LlmClient {
             log.error("Gemini API returned {} : {}", ex.getStatusCode(), ex.getResponseBodyAsString());
             throw ex;
         }
-    }
+    }*/
 
     // ---------- prompt ----------
     private String buildUserPrompt(LlmPayload payload) {
