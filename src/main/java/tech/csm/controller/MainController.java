@@ -13,11 +13,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 
 
+import org.springframework.web.bind.annotation.PathVariable;
+
 import tech.csm.model.EmployeeSkill;
 import tech.csm.model.Employees;
 import tech.csm.repository.DepartmentsRepository;
 import tech.csm.repository.DesignationRepository;
 import tech.csm.repository.EmployeesRepository;
+import tech.csm.repository.ProjectRepository;
 import tech.csm.repository.SkillRepository;
 
 @RestController
@@ -35,6 +38,9 @@ public class MainController {
 
 	@Autowired
 	private SkillRepository skillRepository;
+
+	@Autowired
+	private ProjectRepository projectRepository;
 
 	@Autowired
 	private tech.csm.llm.GeminiLlmClient geminiLlmClient;
@@ -58,7 +64,22 @@ public class MainController {
 		return ResponseEntity.status(HttpStatus.OK).body(employees);
 	}
 
-	 
+	// Candidate details screen ke liye - ek employee ka pura profile.
+	@GetMapping("/employees/{id}")
+	public ResponseEntity<?> getEmployeeById(@PathVariable Integer id) {
+		return employeesRepository.findById(id)
+				.<ResponseEntity<?>>map(ResponseEntity::ok)
+				.orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+						.body(java.util.Map.of("message", "Employee not found: " + id)));
+	}
+
+	// Home screen ke "projects with suggestions ready" list ke liye.
+	@GetMapping("/projects")
+	public ResponseEntity<?> getProjects() {
+		return ResponseEntity.ok(projectRepository.findAll());
+	}
+
+
 	@GetMapping("/designations")
 	public ResponseEntity<?> getDesignations() {
 		return ResponseEntity.ok(designationRepository.findAll());
