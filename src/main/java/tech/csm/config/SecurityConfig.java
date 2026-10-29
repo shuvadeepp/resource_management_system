@@ -32,21 +32,19 @@ public class SecurityConfig {
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-
-    // Angular dev server (ng serve, default port 4200) se cross-origin calls allow karne ke liye.
+    
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:4200"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-        config.setAllowCredentials(true);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return source;
+        CorsConfiguration c = new CorsConfiguration();
+        c.setAllowedOrigins(List.of("http://localhost:4200"));
+        c.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        c.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        UrlBasedCorsConfigurationSource s = new UrlBasedCorsConfigurationSource();
+        s.registerCorsConfiguration("/**", c);
+        return s;
     }
 
+   
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
@@ -56,8 +54,9 @@ public class SecurityConfig {
                 // browser preflight requests carry no Authorization header - must be open
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/auth/**", "/error").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("USER", "ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/**").hasAnyRole("USER", "ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("USER", "ADMIN","PROJECT_MANAGER","LK_ADMIN",
+                		"RESOURCE_MANAGER","SKILL_REVIEWER")
+                .requestMatchers(HttpMethod.POST, "/api/**").hasAnyRole("USER", "ADMIN","PROJECT_MANAGER")
                 .anyRequest().authenticated())
             .exceptionHandling(e -> e
             	    .authenticationEntryPoint((request, response, authException) -> {
