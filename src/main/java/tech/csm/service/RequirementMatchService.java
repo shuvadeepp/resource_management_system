@@ -36,15 +36,18 @@ public class RequirementMatchService {
     private final EmployeesRepository employeesRepository;
     private final EmployeeSkillRepository employeeSkillRepository;
     private final LlmClient llmClient;
+    private final MatchingPersistenceService matchingPersistenceService;
 
     public RequirementMatchService(RequirementService requirementService,
                                    EmployeesRepository employeesRepository,
                                    EmployeeSkillRepository employeeSkillRepository,
-                                   LlmClient llmClient) {
+                                   LlmClient llmClient,
+                                   MatchingPersistenceService matchingPersistenceService) {
         this.requirementService = requirementService;
         this.employeesRepository = employeesRepository;
         this.employeeSkillRepository = employeeSkillRepository;
         this.llmClient = llmClient;
+        this.matchingPersistenceService = matchingPersistenceService;
     }
 
     public RequirementResponse createAndMatch(RequirementRequest request) {
@@ -99,6 +102,10 @@ public class RequirementMatchService {
                 message = "Search done, but the LLM step failed";
             }
             enrichWithEmployeeDetails(llmResult, employees);
+
+            // Side-effect only: response shape ko yahan kuch nahi badalta.
+            // requirementId null ho (requirement DB me save nahi hui) to persist() khud skip kar deta hai.
+            matchingPersistenceService.persist(requirementId, llmResult, employees.size());
         }
 
         return new RequirementResponse("success", message, requirementId,

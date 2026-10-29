@@ -5,13 +5,11 @@ import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -56,8 +54,9 @@ public class SecurityConfig {
                 // browser preflight requests carry no Authorization header - must be open
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/auth/**", "/error").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("USER", "ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/**").hasAnyRole("USER", "ADMIN")
+                // Abhi ke liye koi role restriction nahi - bas logged-in hona chahiye.
+                // Role-based rules baad me per-endpoint add karenge jab zaroorat pade.
+                .requestMatchers("/api/**").authenticated()
                 .anyRequest().authenticated())
             .exceptionHandling(e -> e
             	    .authenticationEntryPoint((request, response, authException) -> {
@@ -67,9 +66,14 @@ public class SecurityConfig {
             	            "{\"message\":\"You are not authorized. Please login first.\"}"
             	        );
             	    })
+            	    .accessDeniedHandler((request, response, accessDeniedException) -> {
+            	        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            	        response.setContentType("application/json");
+            	        response.getWriter().write(
+            	            "{\"message\":\"You do not have permission to do this.\"}"
+            	        );
+            	    })
             	)
-//            .exceptionHandling(e -> e.authenticationEntryPoint(
-//                new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))   // no token = 401, wrong role = 403
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

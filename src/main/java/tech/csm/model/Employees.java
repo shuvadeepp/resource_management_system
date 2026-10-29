@@ -29,7 +29,7 @@ import jakarta.persistence.Table;
 @Table(name = "employees")
 @JsonPropertyOrder({
 
-    "employeeCode", "name", "designation", "department",
+    "employee_id", "employeeCode", "name", "designation", "department",
     "skills", "totalExperienceYears",
     "availabilityStatus", "availableFrom"
 })
@@ -40,6 +40,14 @@ public class Employees implements Serializable {
 	@JsonIgnore
 	@Column(name = "employee_id")
 	private Integer employeeId;
+
+	// Field ke @JsonIgnore ko yahan override karte hain - frontend ko allocation
+	// confirm karne ke liye id chahiye (employees list / single profile par).
+	// snake_case "employee_id" - frontend ke sath match karne ke liye.
+	@JsonProperty("employee_id")
+	public Integer getEmployeeIdForApi() {
+		return employeeId;
+	}
 
 	
 	@Column(name="employee_code")
@@ -109,7 +117,9 @@ public class Employees implements Serializable {
             return null;
         }
 
-        Date date = resourceAvailability.get(0).getAvailableUntil();
+        // Pehle ye galti se getAvailableUntil() padh raha tha - available_from column
+        // alag se available hai ab, wahi sahi value hai.
+        Date date = resourceAvailability.get(0).getAvailableFrom();
 
         if (date == null) {
             return null;
@@ -117,7 +127,15 @@ public class Employees implements Serializable {
 
         return new java.text.SimpleDateFormat("yyyy-MM-dd").format(date);
     }
-    
+
+    @JsonProperty("availableCapacityPercentage")
+    public java.math.BigDecimal getAvailableCapacityPercentage() {
+        if (resourceAvailability == null || resourceAvailability.isEmpty()) {
+            return null;
+        }
+        return resourceAvailability.get(0).getAvailableCapacityPercentage();
+    }
+
     @JsonProperty("skills")
     public List<EmployeeSkill> getSkills() {
         return employeeSkill;
