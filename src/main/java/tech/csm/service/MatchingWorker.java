@@ -35,8 +35,9 @@ public class MatchingWorker {
         this.audit = audit;
     }
 
+    // userId aur clientIp request thread me resolve hokar aate hain (yahan request/JWT nahi hota)
     @Async("matchingExecutor")
-    public void run(Integer runId, Spec spec, List<Scored> pool, Integer userId) {
+    public void run(Integer runId, Spec spec, List<Scored> pool, Integer userId, String clientIp) {
         boolean closed = false;
         try {
             persistence.markRunning(runId);
@@ -44,14 +45,14 @@ public class MatchingWorker {
             List<MatchingResult> saved = persistence.saveOutcome(runId, outcome);
             closed = true;
             audit.log(userId, AuditService.RUN_COMPLETED, "matching_runs", runId, null,
-                    runSummary(saved.size(), outcome), outcome.aiError());
+                    runSummary(saved.size(), outcome), outcome.aiError(), clientIp);
         } catch (Exception ex) {
             log.error("Matching run {} failed", runId, ex);
             String message = "Matching failed: " + ex.getClass().getSimpleName()
                     + (ex.getMessage() != null ? " - " + truncate(ex.getMessage(), 300) : "");
             persistence.markFailed(runId, message);
             closed = true;
-            audit.log(userId, AuditService.RUN_FAILED, "matching_runs", runId, null, null, message);
+            audit.log(userId, AuditService.RUN_FAILED, "matching_runs", runId, null, null, message, clientIp);
         } finally {
             if (!closed) {
                 // markFailed bhi fail hua ho ya koi Error aaya ho - ek aakhri koshish

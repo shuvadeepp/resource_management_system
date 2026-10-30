@@ -15,6 +15,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
+import jakarta.servlet.http.HttpServletRequest;
+import tools.jackson.core.JacksonException;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -35,11 +38,26 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(SkillNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleSkillNotFound(SkillNotFoundException ex) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("status", "error");
-        body.put("message", "Some skills are not in the skill master");
+        // Sirf POST /api/requirements se aata hai -> naya format; missing_skills purane clients ke liye bhi
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("required_skills", "not in the skill master: " + String.join(", ", ex.getMissingSkills()));
+        Map<String, Object> body = validationBody("Some skills are not in the skill master", fields);
         body.put("missing_skills", ex.getMissingSkills());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    // POST /api/requirements: mandatory fields / project_id
+    @ExceptionHandler(RequirementValidationException.class)
+    public ResponseEntity<Map<String, Object>> handleRequirementValidation(RequirementValidationException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(validationBody(ex.getMessage(), ex.getFields()));
+    }
+
+    private static Map<String, Object> validationBody(String detail, Map<String, String> fields) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("error", "Validation failed");
+        body.put("detail", detail);
+        body.put("fields", fields);
+        return body;
     }
 
     // id se record na mila (findById().orElseThrow(), ya aisa hi kuch)
@@ -56,8 +74,47 @@ public class GlobalExceptionHandler {
 
     // Body ka JSON hi galat hai (missing comma, galat date format, ...)
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<Map<String, Object>> handleUnreadable(HttpMessageNotReadableException ex) {
+    public ResponseEntity<Map<String, Object>> handleUnreadable(HttpMessageNotReadableException ex,
+                                                                HttpServletRequest request) {
+        if ("POST".equals(request.getMethod()) && request.getRequestURI().endsWith("/api/requirements")) {
+            // Is endpoint par bhi wahi format, aur jo field toota uska naam
+            String field = failingField(ex);
+            Map<String, String> fields = new LinkedHashMap<>();
+            if (field == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(validationBody("Request body is not valid JSON", fields));
+            }
+            fields.put(field, switch (field) {
+                case "joining_date" -> "must be a date in yyyy-MM-dd format";
+                case "minimum_experience_years" -> "must be a number";
+                case "required_skills" -> "required: send a list of skills";
+                default -> "has a wrong type";
+            });
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(validationBody("Invalid value for " + field, fields));
+        }
         return error(HttpStatus.BAD_REQUEST, "Request body is not valid JSON or has a wrongly typed field");
+    }
+
+    /** Jackson parse error ka JSON path, jaise "joining_date" ya "required_skills[0].minimum_proficiency". */
+    private static String failingField(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof JacksonException je) {
+                StringBuilder sb = new StringBuilder();
+                for (JacksonException.Reference ref : je.getPath()) {
+                    if (ref.getPropertyName() != null) {
+                        if (sb.length() > 0) {
+                            sb.append('.');
+                        }
+                        sb.append(ref.getPropertyName());
+                    } else if (ref.getIndex() >= 0) {
+                        sb.append('[').append(ref.getIndex()).append(']');
+                    }
+                }
+                return sb.length() == 0 ? null : sb.toString();
+            }
+        }
+        return null;
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)

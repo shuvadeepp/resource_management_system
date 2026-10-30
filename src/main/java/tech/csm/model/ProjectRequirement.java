@@ -67,6 +67,13 @@ public class ProjectRequirement {
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // Request bhejne wale client ka IP (X-Forwarded-For ki pehli value ya remote address)
+    @Column(name = "ip_address")
+    private String ipAddress;
+
+    public String getIpAddress() { return ipAddress; }
+    public void setIpAddress(String v) { this.ipAddress = v; }
+
     public Integer getRequirementId() { return requirementId; }
     public void setRequirementId(Integer v) { this.requirementId = v; }
 

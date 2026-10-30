@@ -142,7 +142,7 @@ public class SkillGapService {
         lr.setReviewStatus(value);
         lr.setReviewComments(comments == null || comments.isBlank() ? null : comments.trim());
         lr.setReviewedBy(userId);
-        lr.setReviewedAt(MatchingPersistenceService.nowUtc());
+        lr.setReviewedAt(MatchingPersistenceService.nowIst());
         lr = learningRecommendationRepository.save(lr);
 
         Map<String, Object> now = new LinkedHashMap<>();

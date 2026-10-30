@@ -21,6 +21,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import tech.csm.config.ClientIp;
 import tech.csm.model.AuditLog;
 import tech.csm.model.User;
 import tech.csm.repository.AuditLogRepository;
@@ -72,6 +73,12 @@ public class AuditService {
      */
     public void log(Integer userId, String action, String entityName, Integer recordId,
                     Object oldValues, Object newValues, String remarks) {
+        log(userId, action, entityName, recordId, oldValues, newValues, remarks, currentIp());
+    }
+
+    /** sourceIp explicit - background thread (async run) me request nahi hota, isliye caller deta hai. */
+    public void log(Integer userId, String action, String entityName, Integer recordId,
+                    Object oldValues, Object newValues, String remarks, String sourceIp) {
         try {
             AuditLog entry = new AuditLog();
             entry.setUserId(userId);
@@ -80,7 +87,7 @@ public class AuditService {
             entry.setAffectedRecordId(recordId);
             entry.setOldValues(oldValues == null ? null : MAPPER.writeValueAsString(oldValues));
             entry.setNewValues(newValues == null ? null : MAPPER.writeValueAsString(newValues));
-            entry.setSourceIp(currentIp());
+            entry.setSourceIp(sourceIp);
             entry.setRemarks(remarks);
             auditExecutor.execute(() -> write(entry));
         } catch (Exception ex) {
@@ -151,7 +158,7 @@ public class AuditService {
 
     private String currentIp() {
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs) {
-            return attrs.getRequest().getRemoteAddr();
+            return ClientIp.resolve(attrs.getRequest()); // X-Forwarded-For / ::1 -> 127.0.0.1
         }
         return null; // background thread
     }

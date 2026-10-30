@@ -1,7 +1,7 @@
 package tech.csm.service;
 
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -119,7 +119,7 @@ public class MatchingPersistenceService {
             run.setAlgorithmName("RULES");
         }
         run.setCandidatePoolSize(outcome.poolSize());
-        run.setCompletedAt(MatchingPersistenceService.nowUtc());
+        run.setCompletedAt(MatchingPersistenceService.nowIst());
         matchingRunRepository.save(run);
         return results;
     }
@@ -129,7 +129,7 @@ public class MatchingPersistenceService {
         MatchingRun run = find(runId);
         run.setRunStatus(FAILED);
         run.setErrorMessage(message);
-        run.setCompletedAt(MatchingPersistenceService.nowUtc());
+        run.setCompletedAt(MatchingPersistenceService.nowIst());
         matchingRunRepository.save(run);
     }
 
@@ -143,7 +143,7 @@ public class MatchingPersistenceService {
         for (MatchingRun run : stuck) {
             run.setRunStatus(FAILED);
             run.setErrorMessage("Interrupted by a server restart before it finished");
-            run.setCompletedAt(MatchingPersistenceService.nowUtc());
+            run.setCompletedAt(MatchingPersistenceService.nowIst());
         }
         matchingRunRepository.saveAll(stuck);
         return stuck.size();
@@ -157,12 +157,14 @@ public class MatchingPersistenceService {
 
     // ---------------- helpers ----------------
 
+    private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
+
     /**
-     * DB server UTC me chalta hai (created_at / execution_date jaise CURRENT_TIMESTAMP
-     * defaults UTC hain). Java ki taraf se likhe timestamps bhi UTC me, taaki dono match karein.
+     * App India time par chalti hai: DB session time_zone = Asia/Kolkata (CURRENT_TIMESTAMP
+     * defaults IST), isliye Java ki taraf se likhe timestamps (completed_at, reviewed_at) bhi IST.
      */
-    public static LocalDateTime nowUtc() {
-        return LocalDateTime.now(ZoneOffset.UTC);
+    public static LocalDateTime nowIst() {
+        return LocalDateTime.now(IST);
     }
 
     private MatchingRun find(Integer runId) {

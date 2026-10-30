@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tech.csm.dto.RequiredSkillRequest;
 import tech.csm.dto.RequirementRequest;
 import tech.csm.exception.ApiException;
+import tech.csm.exception.RequirementValidationException;
 import tech.csm.exception.SkillNotFoundException;
 import tech.csm.model.Project;
 import tech.csm.model.ProjectRequirement;
@@ -51,16 +52,23 @@ public class RequirementService {
         this.projectRepository = projectRepository;
     }
 
-    // Caller ensures project_name and joining_date are present
+    // Purane callers ke liye (bina IP)
     @Transactional
     public ProjectRequirement save(RequirementRequest request) {
+        return save(request, null);
+    }
+
+    // Caller ensures project_name and joining_date are present (RequirementValidator)
+    @Transactional
+    public ProjectRequirement save(RequirementRequest request, String ipAddress) {
 
         // 0. project_id diya hai to projects me hona chahiye (FK fk_req_project); nahi diya to default
         Project project = null;
         if (request.projectId() != null) {
             project = projectRepository.findById(request.projectId())
-                    .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST,
-                            "project_id " + request.projectId() + " does not exist in projects"));
+                    .orElseThrow(() -> new RequirementValidationException(
+                            "project_id " + request.projectId() + " does not exist in projects",
+                            Map.of("project_id", "does not exist in projects")));
         }
 
         List<RequiredSkillRequest> requestedSkills =
@@ -114,6 +122,7 @@ public class RequirementService {
 
         pr.setJoiningDate(request.joiningDate());
         pr.setRequirementOwner(defaultRequirementOwner);
+        pr.setIpAddress(ipAddress);
         pr = requirementRepository.save(pr);
 
         // 3. Required skills save

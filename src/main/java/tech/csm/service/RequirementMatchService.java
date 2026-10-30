@@ -32,12 +32,12 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * POST /api/requirements ke chaar modes:
- *  1. skills nahi            -> filter only (sab/filtered employees), Gemini nahi.
- *                               project_name + joining_date ho to requirement save (purana behaviour).
- *  2. skills, project/date nahi -> preview: score karke dikhao, kuch save nahi.
- *  3. skills + project + date  -> sync run (default): save, score, store, response me results.
- *  4. same + ?async=true       -> 202 turant, background me score + store; frontend run ko poll kare.
+ * POST /api/requirements:
+ *  - project_name / joining_date / required_skills me se kuch nahi -> list-only (200, kuch save nahi, Gemini nahi).
+ *  - inme se koi bhi aaya -> RequirementValidator: chaaron mandatory (warna 400, saare missing fields).
+ *    Valid hone par PEHLE project_requirements + required_skills insert, phir matching run:
+ *      default            -> sync: score, store, response me results (201)
+ *      ?async=true        -> 202 turant, background me score + store; frontend run ko poll kare.
  */
 @Service
 public class RequirementMatchService {
@@ -58,6 +58,7 @@ public class RequirementMatchService {
     private final MatchingWorker worker;
     private final CurrentUserService currentUser;
     private final AuditService audit;
+    private final RequirementValidator validator;
 
     public RequirementMatchService(RequirementService requirementService,
                                    CandidatePoolService candidatePool,
@@ -65,7 +66,8 @@ public class RequirementMatchService {
                                    MatchingPersistenceService persistence,
                                    MatchingWorker worker,
                                    CurrentUserService currentUser,
-                                   AuditService audit) {
+                                   AuditService audit,
+                                   RequirementValidator validator) {
         this.requirementService = requirementService;
         this.candidatePool = candidatePool;
         this.engine = engine;
@@ -73,30 +75,21 @@ public class RequirementMatchService {
         this.worker = worker;
         this.currentUser = currentUser;
         this.audit = audit;
+        this.validator = validator;
     }
 
-    public Result handle(RequirementRequest r, boolean async) {
-        boolean hasSkills = r.requiredSkills() != null && !r.requiredSkills().isEmpty();
-        boolean canSave = hasText(r.projectName()) && r.joiningDate() != null;
-
-        if (!hasSkills) {
-            return filterOnly(r, canSave);
+    /** clientIp controller ne request thread par nikala hai (insert + har audit row me jaata hai). */
+    public Result handle(RequirementRequest r, boolean async, String clientIp) {
+        if (!RequirementValidator.isMatchingRequest(r)) {
+            return filterOnly(r);
         }
-        if (!canSave) {
-            return preview(r);
-        }
-        return async ? startAsync(r) : runSync(r);
+        validator.validate(r); // 400 RequirementValidationException, kuch insert hone se pehle
+        return async ? startAsync(r, clientIp) : runSync(r, clientIp);
     }
 
-    // ---------------- 1. filter only ----------------
+    // ---------------- list only (nothing saved) ----------------
 
-    private Result filterOnly(RequirementRequest r, boolean save) {
-        ProjectRequirement saved = null;
-        if (save) {
-            saved = requirementService.save(r);
-            auditRequirementCreated(currentUser.currentUserId(), saved, r);
-        }
-
+    private Result filterOnly(RequirementRequest r) {
         List<Candidate> candidates = candidatePool.load(r.designation(), r.department(), r.minimumExperienceYears());
 
         JsonNode llmResult;
@@ -113,48 +106,30 @@ public class RequirementMatchService {
             message = "Employees filtered (no skills given, so no scoring)";
         }
 
-        RequirementResponse body = new RequirementResponse("success", message,
-                saved != null ? saved.getRequirementId() : null,
-                saved != null ? saved.getStatus() : null,
-                candidates.size(), llmResult, saved != null, employeesList(candidates), null, null);
-        return new Result(saved != null ? HttpStatus.CREATED : HttpStatus.OK, body);
-    }
-
-    // ---------------- 2. preview (nothing saved) ----------------
-
-    private Result preview(RequirementRequest r) {
-        Prepared p = prepare(r);
-        Outcome outcome = engine.score(p.spec(), p.pool());
-
-        String message = "Preview only, not saved: choose a project and a joining date to save this search."
-                + switch (outcome.aiStatus()) {
-                    case MatchingData.AI_FAILED -> " " + outcome.aiError() + ".";
-                    case MatchingData.AI_DISABLED -> " AI is turned off, scored by rules only.";
-                    default -> "";
-                };
         RequirementResponse body = new RequirementResponse("success", message, null, null,
-                outcome.poolSize(), llmResult(outcome, null), false, null, null, null);
+                candidates.size(), llmResult, false, employeesList(candidates), null, null);
         return new Result(HttpStatus.OK, body);
     }
 
-    // ---------------- 3. sync run ----------------
+    // ---------------- sync run ----------------
 
-    private Result runSync(RequirementRequest r) {
+    private Result runSync(RequirementRequest r, String clientIp) {
         Integer userId = currentUser.currentUserId();
-        ProjectRequirement saved = requirementService.save(r);
-        auditRequirementCreated(userId, saved, r);
+        // Insert pehle, apni transaction me commit - aage kuch bhi fail ho, ye row rehti hai
+        ProjectRequirement saved = requirementService.save(r, clientIp);
+        auditRequirementCreated(userId, saved, r, clientIp);
 
         Prepared p = prepare(r);
         MatchingRun run = persistence.createRun(saved.getRequirementId(), p.pool().size(), userId);
         Integer runId = run.getMatchingRunId();
-        audit.log(userId, AuditService.RUN_STARTED, "matching_runs", runId, null, Map.of("mode", "sync"), null);
+        audit.log(userId, AuditService.RUN_STARTED, "matching_runs", runId, null, Map.of("mode", "sync"), null, clientIp);
 
         try {
             persistence.markRunning(runId);
             Outcome outcome = engine.score(p.spec(), p.pool());
             List<MatchingResult> results = persistence.saveOutcome(runId, outcome);
             audit.log(userId, AuditService.RUN_COMPLETED, "matching_runs", runId, null,
-                    MatchingWorker.runSummary(results.size(), outcome), outcome.aiError());
+                    MatchingWorker.runSummary(results.size(), outcome), outcome.aiError(), clientIp);
 
             String runStatus = MatchingData.AI_FAILED.equals(outcome.aiStatus())
                     ? MatchingPersistenceService.COMPLETED_WITH_ERRORS : MatchingPersistenceService.COMPLETED;
@@ -166,29 +141,29 @@ public class RequirementMatchService {
             log.error("Sync matching run {} failed", runId, ex);
             String message = "Matching failed: " + ex.getClass().getSimpleName();
             persistence.markFailed(runId, message);
-            audit.log(userId, AuditService.RUN_FAILED, "matching_runs", runId, null, null, message);
+            audit.log(userId, AuditService.RUN_FAILED, "matching_runs", runId, null, null, message, clientIp);
             throw ex;
         }
     }
 
-    // ---------------- 4. async run ----------------
+    // ---------------- async run ----------------
 
-    private Result startAsync(RequirementRequest r) {
+    private Result startAsync(RequirementRequest r, String clientIp) {
         Integer userId = currentUser.currentUserId(); // background thread me JWT nahi hota
-        ProjectRequirement saved = requirementService.save(r);
-        auditRequirementCreated(userId, saved, r);
+        ProjectRequirement saved = requirementService.save(r, clientIp);
+        auditRequirementCreated(userId, saved, r, clientIp);
 
         Prepared p = prepare(r);
         MatchingRun run = persistence.createRun(saved.getRequirementId(), p.pool().size(), userId);
         Integer runId = run.getMatchingRunId();
-        audit.log(userId, AuditService.RUN_STARTED, "matching_runs", runId, null, Map.of("mode", "async"), null);
+        audit.log(userId, AuditService.RUN_STARTED, "matching_runs", runId, null, Map.of("mode", "async"), null, clientIp);
 
         try {
-            worker.run(runId, p.spec(), p.pool(), userId);
+            worker.run(runId, p.spec(), p.pool(), userId, clientIp);
         } catch (TaskRejectedException ex) {
             String message = "Server is busy with other matching runs, try again in a minute";
             persistence.markFailed(runId, message);
-            audit.log(userId, AuditService.RUN_FAILED, "matching_runs", runId, null, null, message);
+            audit.log(userId, AuditService.RUN_FAILED, "matching_runs", runId, null, null, message, clientIp);
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, message);
         }
 
@@ -345,14 +320,15 @@ public class RequirementMatchService {
         return a;
     }
 
-    private void auditRequirementCreated(Integer userId, ProjectRequirement saved, RequirementRequest r) {
+    private void auditRequirementCreated(Integer userId, ProjectRequirement saved, RequirementRequest r, String clientIp) {
         Map<String, Object> v = new LinkedHashMap<>();
+        v.put("project_id", saved.getProjectId());
         v.put("requirement_code", saved.getRequirementCode());
         v.put("role_name", saved.getRoleName());
         v.put("joining_date", String.valueOf(saved.getJoiningDate()));
         v.put("required_skills", r.requiredSkills() == null ? 0 : r.requiredSkills().size());
         audit.log(userId, AuditService.REQUIREMENT_CREATED, "project_requirements",
-                saved.getRequirementId(), null, v, null);
+                saved.getRequirementId(), null, v, null, clientIp);
     }
 
     private static boolean hasText(String s) {

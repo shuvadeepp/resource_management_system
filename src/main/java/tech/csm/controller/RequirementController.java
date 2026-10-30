@@ -1,8 +1,9 @@
 package tech.csm.controller;
 
-import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import tech.csm.config.ClientIp;
 import tech.csm.dto.RequirementRequest;
 import tech.csm.service.RequirementMatchService;
 import tech.csm.service.RequirementQueryService;
@@ -20,13 +21,17 @@ public class RequirementController {
         this.requirementQueryService = requirementQueryService;
     }
 
-    // Body optional: bina body / {} = saare employees, kuch save nahi.
-    // ?async=true (skills + project_name + joining_date ke saath) = 202 turant, run background me.
+    // Body optional: bina body / {} / sirf filters = employees list, kuch save nahi.
+    // project_name / joining_date / required_skills me se koi bhi -> chaaron mandatory (400 warna),
+    // phir insert + matching. ?async=true = 202 turant, run background me.
+    // @Valid nahi: saari checks RequirementValidator karta hai, taaki error ek hi format me aaye.
     @PostMapping("/requirements")
-    public ResponseEntity<?> create(@Valid @RequestBody(required = false) RequirementRequest request,
-                                    @RequestParam(defaultValue = "false") boolean async) {
+    public ResponseEntity<?> create(@RequestBody(required = false) RequirementRequest request,
+                                    @RequestParam(defaultValue = "false") boolean async,
+                                    HttpServletRequest httpRequest) {
+        String clientIp = ClientIp.resolve(httpRequest);
         RequirementMatchService.Result result = requirementMatchService.handle(
-                request != null ? request : RequirementRequest.empty(), async);
+                request != null ? request : RequirementRequest.empty(), async, clientIp);
         return ResponseEntity.status(result.status()).body(result.body());
     }
 

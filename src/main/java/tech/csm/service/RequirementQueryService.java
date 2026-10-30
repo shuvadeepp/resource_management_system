@@ -120,6 +120,7 @@ public class RequirementQueryService {
         m.put("requirement_priority", r.getRequirementPriority());
         m.put("requirement_status", r.getStatus());
         m.put("created_at", r.getCreatedAt());
+        m.put("ip_address", r.getIpAddress());
 
         List<Map<String, Object>> skills = new ArrayList<>();
         for (RequiredSkill rs : rows) {
