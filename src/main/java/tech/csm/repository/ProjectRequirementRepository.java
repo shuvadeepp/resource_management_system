@@ -4,4 +4,9 @@ import tech.csm.model.ProjectRequirement;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProjectRequirementRepository extends JpaRepository<ProjectRequirement, Integer> {
+
+    long countByStatusIn(java.util.Collection<String> statuses);
+
+    // requirement_code par UNIQUE index hai
+    boolean existsByRequirementCode(String requirementCode);
 }

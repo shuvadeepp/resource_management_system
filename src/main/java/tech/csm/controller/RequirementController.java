@@ -1,11 +1,9 @@
 package tech.csm.controller;
 
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import tech.csm.dto.RequirementRequest;
-import tech.csm.dto.RequirementResponse;
 import tech.csm.service.RequirementMatchService;
 import tech.csm.service.RequirementQueryService;
 
@@ -22,10 +20,14 @@ public class RequirementController {
         this.requirementQueryService = requirementQueryService;
     }
 
+    // Body optional: bina body / {} = saare employees, kuch save nahi.
+    // ?async=true (skills + project_name + joining_date ke saath) = 202 turant, run background me.
     @PostMapping("/requirements")
-    public ResponseEntity<RequirementResponse> create(@Valid @RequestBody RequirementRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(requirementMatchService.createAndMatch(request));
+    public ResponseEntity<?> create(@Valid @RequestBody(required = false) RequirementRequest request,
+                                    @RequestParam(defaultValue = "false") boolean async) {
+        RequirementMatchService.Result result = requirementMatchService.handle(
+                request != null ? request : RequirementRequest.empty(), async);
+        return ResponseEntity.status(result.status()).body(result.body());
     }
 
     // Saare saved requirements, har ek ke required_skills ke saath.
@@ -40,10 +42,10 @@ public class RequirementController {
         return ResponseEntity.ok(requirementQueryService.getRequirement(id));
     }
 
-    // Us requirement ki sabse recent Gemini run ke saare persisted matches
-    // (Decisions screen ke liye - bina dobara Gemini call kiye).
+    // Latest finished run (ya ?runId=) ke saare matches - results + decisions screen ke liye ek hi call.
     @GetMapping("/requirements/{id}/matches")
-    public ResponseEntity<?> getMatches(@PathVariable Integer id) {
-        return ResponseEntity.ok(requirementQueryService.getMatches(id));
+    public ResponseEntity<?> getMatches(@PathVariable Integer id,
+                                        @RequestParam(required = false) Integer runId) {
+        return ResponseEntity.ok(requirementQueryService.getMatches(id, runId));
     }
 }

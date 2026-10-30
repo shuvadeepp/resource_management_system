@@ -11,11 +11,16 @@ import jakarta.validation.constraints.NotNull;
  */
 public record DecisionRequest(
 
-        @NotNull @JsonProperty("matching_result_id") Integer matchingResultId,
-        @NotNull @JsonProperty("requirement_id") Integer requirementId,
+        @NotNull(message = "matching_result_id is required")
+        @JsonProperty("matching_result_id") Integer matchingResultId,
+
+        @NotNull(message = "requirement_id is required")
+        @JsonProperty("requirement_id") Integer requirementId,
 
         // SELECTED | REJECTED | ON_HOLD | DEFERRED | WITHDRAWN
-        @NotBlank @JsonProperty("decision") String decision,
+        @NotBlank(message = "decision is required")
+        @JsonProperty("decision") String decision,
 
-        @NotBlank @JsonProperty("decision_reason") String decisionReason
+        @NotBlank(message = "decision_reason is required: write a short comment for this decision")
+        @JsonProperty("decision_reason") String decisionReason
 ) {}

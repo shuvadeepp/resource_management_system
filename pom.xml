@@ -102,6 +102,13 @@
 	    <groupId>org.springframework.boot</groupId>
 	    <artifactId>spring-boot-starter-web</artifactId>
 	</dependency>
+
+	<!-- Excel exports (.xlsx) for matches and decisions -->
+	<dependency>
+		<groupId>org.apache.poi</groupId>
+		<artifactId>poi-ooxml</artifactId>
+		<version>5.4.1</version>
+	</dependency>
 	</dependencies>
 
 	<build>

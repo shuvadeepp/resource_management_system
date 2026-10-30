@@ -43,6 +43,9 @@ public class MainController {
 	private ProjectRepository projectRepository;
 
 	@Autowired
+	private tech.csm.service.EmployeeQueryService employeeQueryService;
+
+	@Autowired
 	private tech.csm.llm.GeminiLlmClient geminiLlmClient;
 
 	@GetMapping("/llm/test")
@@ -59,7 +62,7 @@ public class MainController {
 	@GetMapping("/getEmployees")
 	public ResponseEntity<?>  getAllEMployees()
 	{
-		List<Employees> employees = employeesRepository.findAll();
+		List<Employees> employees = employeeQueryService.findAllWithDetails();
 		if(employees == null) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Data Not found");
 		return ResponseEntity.status(HttpStatus.OK).body(employees);
 	}
@@ -104,7 +107,7 @@ public class MainController {
 			@RequestParam(required = false) List<String> skills) {
 
 		List<Employees> matches = new ArrayList<>();
-		for (Employees emp : employeesRepository.findAll()) {
+		for (Employees emp : employeeQueryService.findAllWithDetails()) {
 			if (matchesFilters(emp, designation, department, minExperience, skills)) {
 				matches.add(emp);
 			}

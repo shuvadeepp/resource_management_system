@@ -1,175 +1,227 @@
 package tech.csm.service;
 
-import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import tech.csm.model.LearningRecommendation;
 import tech.csm.model.MatchingResult;
 import tech.csm.model.MatchingRun;
-import tech.csm.model.RequiredSkill;
-import tech.csm.model.Skill;
 import tech.csm.repository.LearningRecommendationRepository;
 import tech.csm.repository.MatchingResultRepository;
 import tech.csm.repository.MatchingRunRepository;
-import tech.csm.repository.RequiredSkillRepository;
-import tech.csm.repository.SkillRepository;
-import tech.csm.repository.UserRepo;
-import tools.jackson.databind.JsonNode;
+import tech.csm.service.MatchingData.FinalMatch;
+import tech.csm.service.MatchingData.Gap;
+import tech.csm.service.MatchingData.LearningItem;
+import tech.csm.service.MatchingData.Outcome;
+import tech.csm.service.MatchingData.Transferable;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Gemini ka result (JsonNode, RequirementMatchService me pehle se bana hua)
- * ko matching_runs + matching_results + learning_recommendations me save
- * karta hai. Sirf tab call hota hai jab requirement DB me save hui ho
- * (requirementId != null) aur Gemini ne "matches" array diya ho (error nahi).
- *
- * Response shape (RequirementResponse) yahan se bilkul nahi badalta - ye
- * sirf extra, side-effect persistence hai.
+ * matching_runs / matching_results / learning_recommendations ke saare writes.
+ * Har method ek chhoti transaction hai - Gemini call kabhi inke andar nahi hota.
  */
 @Service
 public class MatchingPersistenceService {
 
+    public static final String QUEUED = "QUEUED";
+    public static final String RUNNING = "RUNNING";
+    public static final String COMPLETED = "COMPLETED";
+    public static final String COMPLETED_WITH_ERRORS = "COMPLETED_WITH_ERRORS";
+    public static final String FAILED = "FAILED";
+
     private static final Logger log = LoggerFactory.getLogger(MatchingPersistenceService.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final String SCORING_VERSION = "frd-weights-v1";
 
     private final MatchingRunRepository matchingRunRepository;
     private final MatchingResultRepository matchingResultRepository;
     private final LearningRecommendationRepository learningRecommendationRepository;
-    private final RequiredSkillRepository requiredSkillRepository;
-    private final SkillRepository skillRepository;
-    private final UserRepo userRepo;
 
     @Value("${gemini.model}")
     private String geminiModel;
 
+    @Value("${app.matching.use-llm:true}")
+    private boolean useLlm;
+
     public MatchingPersistenceService(MatchingRunRepository matchingRunRepository,
                                       MatchingResultRepository matchingResultRepository,
-                                      LearningRecommendationRepository learningRecommendationRepository,
-                                      RequiredSkillRepository requiredSkillRepository,
-                                      SkillRepository skillRepository,
-                                      UserRepo userRepo) {
+                                      LearningRecommendationRepository learningRecommendationRepository) {
         this.matchingRunRepository = matchingRunRepository;
         this.matchingResultRepository = matchingResultRepository;
         this.learningRecommendationRepository = learningRecommendationRepository;
-        this.requiredSkillRepository = requiredSkillRepository;
-        this.skillRepository = skillRepository;
-        this.userRepo = userRepo;
     }
 
     @Transactional
-    public void persist(Integer requirementId, JsonNode llmResult, int candidatePoolSize) {
-        if (requirementId == null || llmResult == null || !(llmResult.path("matches") instanceof ArrayNode matches)) {
-            return; // requirement DB me save nahi hui, ya Gemini ne error diya - kuch persist nahi karte
-        }
-
-        try {
-            Integer currentUserId = currentUserId();
-
-            MatchingRun run = new MatchingRun();
-            run.setRequirementId(requirementId);
-            run.setScoringConfigurationVersion(geminiModel);
-            run.setAlgorithmName("gemini");
-            run.setModelVersion(geminiModel);
-            run.setCandidatePoolSize(candidatePoolSize);
-            run.setRunStatus("COMPLETED");
-            run.setExecutedBy(currentUserId);
-            run = matchingRunRepository.save(run);
-
-            List<RequiredSkill> requiredSkills = requiredSkillRepository.findByRequirementId(requirementId);
-
-            for (int i = 0; i < matches.size(); i++) {
-                JsonNode m = matches.get(i);
-                Integer employeeId = m.path("employee_id").isMissingNode() ? null : m.path("employee_id").asInt();
-                if (employeeId == null) {
-                    continue; // employee resolve nahi hua (code se match nahi mila) to row skip
-                }
-
-                BigDecimal score = m.has("match_score") ? BigDecimal.valueOf(m.path("match_score").asDouble()) : null;
-
-                MatchingResult mr = new MatchingResult();
-                mr.setMatchingRunId(run.getMatchingRunId());
-                mr.setEmployeeId(employeeId);
-                mr.setOverallScore(score);
-                mr.setMatchCategory(categoryFromScore(score));
-                mr.setExplanation(m.path("explanation").asString(null));
-                mr.setRankPosition(i + 1);
-
-                ObjectNode strengths = MAPPER.createObjectNode();
-                strengths.set("matching_skills", m.path("matching_skills"));
-                strengths.set("transferable_skills", m.path("transferable_skills"));
-                mr.setStrengths(strengths.toString());
-
-                ObjectNode gaps = MAPPER.createObjectNode();
-                gaps.set("missing_skills", m.path("missing_skills"));
-                gaps.set("below_required_proficiency", m.path("below_required_proficiency"));
-                mr.setSkillGaps(gaps.toString());
-
-                mr = matchingResultRepository.save(mr);
-
-                saveLearningSuggestions(mr, m.path("learning_suggestions"), requiredSkills);
-            }
-        } catch (Exception ex) {
-            // Persistence fail hone par bhi Gemini ka response user ko mil chuka hota hai -
-            // sirf log karo, caller (RequirementMatchService) ko fail mat karo.
-            log.error("Could not persist matching run/results for requirement {}", requirementId, ex);
-        }
+    public MatchingRun createRun(Integer requirementId, int candidatePoolSize, Integer executedBy) {
+        MatchingRun run = new MatchingRun();
+        run.setRequirementId(requirementId);
+        run.setScoringConfigurationVersion(SCORING_VERSION);
+        run.setAlgorithmName(useLlm ? "GEMINI" : "RULES");
+        run.setAlgorithmVersion("v1");
+        run.setModelVersion(useLlm ? geminiModel : null);
+        run.setCandidatePoolSize(candidatePoolSize);
+        run.setRunStatus(QUEUED);
+        run.setExecutedBy(executedBy);
+        return matchingRunRepository.save(run);
     }
 
-    private void saveLearningSuggestions(MatchingResult mr, JsonNode suggestions, List<RequiredSkill> requiredSkills) {
-        if (suggestions == null || !suggestions.isArray()) {
-            return;
+    @Transactional
+    public void markRunning(Integer runId) {
+        MatchingRun run = find(runId);
+        run.setRunStatus(RUNNING);
+        matchingRunRepository.save(run);
+    }
+
+    /**
+     * Saare results ek saveAll me, phir unki learning recommendations ek saveAll me,
+     * phir run COMPLETED / COMPLETED_WITH_ERRORS - sab ek transaction.
+     * Returned list outcome.matches() ke order me hai.
+     */
+    @Transactional
+    public List<MatchingResult> saveOutcome(Integer runId, Outcome outcome) {
+        List<MatchingResult> results = new ArrayList<>();
+        for (FinalMatch fm : outcome.matches()) {
+            MatchingResult mr = new MatchingResult();
+            mr.setMatchingRunId(runId);
+            mr.setEmployeeId(fm.scored().candidate().employeeId());
+            mr.setOverallScore(fm.score());
+            mr.setMatchCategory(fm.category());
+            mr.setRankPosition(fm.rank());
+            mr.setExplanation(fm.explanation());
+            mr.setRecommendationStatus("REVIEW_REQUIRED");
+            mr.setStrengths(strengthsJson(fm));
+            mr.setSkillGaps(gapsJson(fm.scored().gaps()));
+            results.add(mr);
         }
-        for (JsonNode s : suggestions) {
-            String skillName = s.path("skill").asString(null);
-            if (skillName == null || skillName.isBlank()) {
+        results = matchingResultRepository.saveAll(results);
+
+        List<LearningRecommendation> recs = new ArrayList<>();
+        for (int i = 0; i < results.size(); i++) {
+            recs.addAll(toRecommendations(results.get(i).getMatchingResultId(), outcome.matches().get(i).learning()));
+        }
+        learningRecommendationRepository.saveAll(recs);
+
+        MatchingRun run = find(runId);
+        run.setRunStatus(MatchingData.AI_FAILED.equals(outcome.aiStatus()) ? COMPLETED_WITH_ERRORS : COMPLETED);
+        run.setErrorMessage(outcome.aiError());
+        if (!MatchingData.AI_USED.equals(outcome.aiStatus())) {
+            run.setAlgorithmName("RULES");
+        }
+        run.setCandidatePoolSize(outcome.poolSize());
+        run.setCompletedAt(MatchingPersistenceService.nowUtc());
+        matchingRunRepository.save(run);
+        return results;
+    }
+
+    @Transactional
+    public void markFailed(Integer runId, String message) {
+        MatchingRun run = find(runId);
+        run.setRunStatus(FAILED);
+        run.setErrorMessage(message);
+        run.setCompletedAt(MatchingPersistenceService.nowUtc());
+        matchingRunRepository.save(run);
+    }
+
+    /**
+     * Startup par: jo runs QUEUED/RUNNING me atke hain unhe FAILED. App ek hi
+     * instance me chalti hai, isliye restart ke baad inme se koi zinda nahi ho sakta.
+     */
+    @Transactional
+    public int recoverInterruptedRuns() {
+        List<MatchingRun> stuck = matchingRunRepository.findByRunStatusIn(List.of(QUEUED, RUNNING));
+        for (MatchingRun run : stuck) {
+            run.setRunStatus(FAILED);
+            run.setErrorMessage("Interrupted by a server restart before it finished");
+            run.setCompletedAt(MatchingPersistenceService.nowUtc());
+        }
+        matchingRunRepository.saveAll(stuck);
+        return stuck.size();
+    }
+
+    /** On-demand generate se aayi recommendations. */
+    @Transactional
+    public List<LearningRecommendation> saveRecommendations(Integer matchingResultId, List<LearningItem> items) {
+        return learningRecommendationRepository.saveAll(toRecommendations(matchingResultId, items));
+    }
+
+    // ---------------- helpers ----------------
+
+    /**
+     * DB server UTC me chalta hai (created_at / execution_date jaise CURRENT_TIMESTAMP
+     * defaults UTC hain). Java ki taraf se likhe timestamps bhi UTC me, taaki dono match karein.
+     */
+    public static LocalDateTime nowUtc() {
+        return LocalDateTime.now(ZoneOffset.UTC);
+    }
+
+    private MatchingRun find(Integer runId) {
+        return matchingRunRepository.findById(runId)
+                .orElseThrow(() -> new NoSuchElementException("Matching run not found: " + runId));
+    }
+
+    private List<LearningRecommendation> toRecommendations(Integer matchingResultId, List<LearningItem> items) {
+        List<LearningRecommendation> out = new ArrayList<>();
+        for (LearningItem li : items) {
+            if (li.skill().skillId() == null) {
+                log.warn("Skipping learning recommendation: skill '{}' not in skill master", li.skill().skillName());
                 continue;
             }
-            Skill skill = skillRepository.findBySkillNameIgnoreCase(skillName.trim()).orElse(null);
-            if (skill == null) {
-                continue; // skill master me nahi mila, suggestion skip
+            LearningRecommendation lr = new LearningRecommendation();
+            lr.setMatchingResultId(matchingResultId);
+            lr.setSkillId(li.skill().skillId());
+            lr.setCurrentProficiency(li.currentLevel());
+            lr.setTargetProficiency(li.skill().minProficiency());
+            lr.setSkillGapDescription(li.gapDescription());
+            lr.setLearningAction(li.action());
+            lr.setLearningResource(li.resource());
+            lr.setResourceType(MatchScorer.resourceType(li.resourceType()));
+            lr.setReviewStatus("PENDING");
+            out.add(lr);
+        }
+        return out;
+    }
+
+    private String strengthsJson(FinalMatch fm) {
+        ObjectNode n = MAPPER.createObjectNode();
+        ArrayNode matching = n.putArray("matching_skills");
+        fm.scored().matchingSkills().forEach(matching::add);
+        ArrayNode transferable = n.putArray("transferable_skills");
+        for (Transferable t : fm.scored().transferable()) {
+            ObjectNode tn = transferable.addObject();
+            tn.put("skill", t.skill());
+            tn.put("related_to", t.relatedTo());
+            tn.put("note", "transferable, needs validation");
+        }
+        n.put("scored_by", fm.scoredBy());
+        n.put("rule_score", fm.scored().ruleScore());
+        return n.toString();
+    }
+
+    public static String gapsJson(List<Gap> gaps) {
+        ObjectNode n = MAPPER.createObjectNode();
+        ArrayNode missing = n.putArray("missing_skills");
+        ArrayNode below = n.putArray("below_required_proficiency");
+        for (Gap g : gaps) {
+            if (g.missing()) {
+                missing.add(g.skill().skillName());
+            } else {
+                ObjectNode b = below.addObject();
+                b.put("skill", g.skill().skillName());
+                b.put("has", g.currentLevel());
+                b.put("needs", g.skill().minProficiency());
             }
-
-            Integer targetProficiency = requiredSkills.stream()
-                    .filter(rs -> rs.getSkillId().equals(skill.getSkillId()))
-                    .map(RequiredSkill::getMinimumProficiency)
-                    .findFirst()
-                    .orElse(3); // default, jab requirement me ye skill explicitly nahi maangi thi
-
-            tech.csm.model.LearningRecommendation lr = new tech.csm.model.LearningRecommendation();
-            lr.setMatchingResultId(mr.getMatchingResultId());
-            lr.setSkillId(skill.getSkillId());
-            lr.setTargetProficiency(targetProficiency);
-            lr.setLearningAction(s.path("action").asString("Review and build this skill"));
-            lr.setSkillGapDescription(skillName);
-            learningRecommendationRepository.save(lr);
         }
-    }
-
-    private String categoryFromScore(BigDecimal score) {
-        if (score == null) return "LOW";
-        double v = score.doubleValue();
-        if (v >= 80) return "EXCELLENT";
-        if (v >= 65) return "GOOD";
-        if (v >= 50) return "PARTIAL";
-        return "LOW";
-    }
-
-    private Integer currentUserId() {
-        try {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth == null || auth.getName() == null) return null;
-            return userRepo.findByUserName(auth.getName()).map(u -> u.getUserId()).orElse(null);
-        } catch (Exception ex) {
-            return null;
-        }
+        return n.toString();
     }
 }

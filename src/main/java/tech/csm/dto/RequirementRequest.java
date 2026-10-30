@@ -27,4 +27,11 @@ public record RequirementRequest(
         @JsonProperty("duration_months") Integer durationMonths,
         @JsonProperty("headcount") Integer headcount,
         @JsonProperty("priority") String priority
-) {}
+) {
+
+    /** Body bilkul na aaye (POST bina body) to isse "sab employees, koi filter nahi" maana jaata hai. */
+    public static RequirementRequest empty() {
+        return new RequirementRequest(null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null);
+    }
+}

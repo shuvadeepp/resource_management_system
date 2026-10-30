@@ -1,5 +1,9 @@
 package tech.csm.llm;
 
+import java.net.SocketTimeoutException;
+import java.net.http.HttpClient;
+import java.net.http.HttpTimeoutException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,8 +13,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
@@ -19,10 +24,6 @@ import tech.csm.dto.EmployeeSkillProfile;
 import tech.csm.dto.LlmPayload;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
-import org.springframework.http.client.JdkClientHttpRequestFactory;
-import java.net.http.HttpClient;
-import java.time.Duration;
 
 @Component
 public class GeminiLlmClient implements LlmClient {
@@ -39,6 +40,12 @@ public class GeminiLlmClient implements LlmClient {
             Return ONLY valid JSON, no extra text.
             """;
 
+    private static final String KEY_MISSING = "AI key not configured";
+
+    // Connection error / 5xx par retry: 3 attempts, 2s -> 4s. 429 (quota) aur timeout par kabhi retry nahi.
+    private static final int MAX_ATTEMPTS = 3;
+    private static final long FIRST_WAIT_MS = 2000;
+
     private final RestClient restClient;
     private final ObjectMapper mapper;
     private final String apiKey;
@@ -51,22 +58,12 @@ public class GeminiLlmClient implements LlmClient {
                            @Value("${gemini.base-url}") String baseUrl,
                            @Value("${gemini.temperature:0.2}") double temperature,
                            @Value("${gemini.connect-timeout-ms:10000}") int connectTimeoutMs,
-                           @Value("${gemini.read-timeout-ms:90000}") int readTimeoutMs) {
+                           @Value("${gemini.read-timeout-ms:60000}") int readTimeoutMs) {
         this.mapper = mapper;
         this.apiKey = apiKey;
         this.model = model;
         this.temperature = temperature;
 
-		/*
-		 * SimpleClientHttpRequestFactory factory = new
-		 * SimpleClientHttpRequestFactory();
-		 * factory.setConnectTimeout(connectTimeoutMs);
-		 * factory.setReadTimeout(readTimeoutMs);
-		 * 
-		 * this.restClient = RestClient.builder() .baseUrl(baseUrl)
-		 * .requestFactory(factory) .build();
-		 */
-        
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
                 .build();
@@ -79,47 +76,108 @@ public class GeminiLlmClient implements LlmClient {
                 .build();
     }
 
-    // ---------- used by the matching flow ----------
+    public String getModel() { return model; }
+
+    // ---------- purana matching flow (LlmClient) - unchanged behaviour ----------
     @Override
     public JsonNode analyze(LlmPayload payload) {
         String userPrompt = buildUserPrompt(payload);
-        String text = callGemini(SYSTEM_PROMPT, userPrompt, true);
-
+        String text = callGemini(SYSTEM_PROMPT, userPrompt, true, 16384);
         log.info("Gemini raw reply ({} chars): {}", text.length(), text);
-
-        // remove ```json fences if the model added them
-        String cleaned = text.trim();
-        if (cleaned.startsWith("```")) {
-            cleaned = cleaned.replaceFirst("^```(?:json)?\\s*", "").replaceFirst("\\s*```$", "");
-        }
-
-        try {
-            return mapper.readTree(cleaned);
-        } catch (Exception ex) {
-            log.error("Could not parse Gemini reply as JSON", ex);
-            throw ex;
-        }
+        return parseJson(text);
     }
-    // ---------- used by the connection test ----------
+
+    // ---------- connection test ----------
     public String ask(String question) {
-        return callGemini("You are a helpful assistant. Answer briefly.", question, false);
+        return callGemini("You are a helpful assistant. Answer briefly.", question, false, 1024);
     }
 
-    // ---------- core call ----------
-     
-    private String callGemini(String systemPrompt, String userPrompt, boolean jsonMode) {
-        int maxAttempts = 4;
-        long waitMs = 3000;
+    /**
+     * Compact scoring: requirement + chhota candidate pool (code, experience, skills only).
+     * Reply: {"matches":[{"employee_code","match_score","explanation","learning_suggestions":[...]}]}
+     */
+    public JsonNode scoreCandidates(Map<String, Object> requirement, List<Map<String, Object>> candidates, int topN) {
+        String prompt = """
+                Requirement:
+                %s
 
+                Candidates (code = employee_code; skills as n = name, lvl = proficiency 1-5, yrs = years used):
+                %s
+
+                Task:
+                1. Score every candidate 0-100 against the requirement (mandatory skills, minimum level, experience).
+                   A candidate missing a mandatory skill must score 49 or less.
+                2. Return only the best %d candidates, best first.
+                3. explanation: at most 2 short sentences.
+                4. learning_suggestions: only for required skills the candidate lacks or has below the minimum level;
+                   action at most 20 words.
+
+                Return JSON exactly in this shape:
+                {"matches":[{"employee_code":"","match_score":0,"explanation":"",
+                  "learning_suggestions":[{"skill":"","action":"","resource":"",
+                  "resource_type":"COURSE|CERTIFICATION|DOCUMENTATION|MENTORING|PRACTICAL_ASSIGNMENT"}]}]}
+                """.formatted(mapper.writeValueAsString(requirement), mapper.writeValueAsString(candidates), topN);
+
+        String text = callGemini(SYSTEM_PROMPT, prompt, true, 8192);
+        log.info("Gemini scoring reply: {} chars for {} candidates", text.length(), candidates.size());
+        return parseJson(text);
+    }
+
+    /** Sirf learning actions, diye gaye gaps ke liye (on-demand generate). */
+    public JsonNode suggestLearning(List<Map<String, Object>> gaps) {
+        String prompt = """
+                Skill gaps of one employee (current_level null = skill missing):
+                %s
+
+                For each gap give one learning action (at most 20 words), an optional resource,
+                and a resource_type.
+
+                Return JSON exactly in this shape:
+                {"learning_suggestions":[{"skill":"","action":"","resource":"",
+                  "resource_type":"COURSE|CERTIFICATION|DOCUMENTATION|MENTORING|PRACTICAL_ASSIGNMENT"}]}
+                """.formatted(mapper.writeValueAsString(gaps));
+        return parseJson(callGemini(SYSTEM_PROMPT, prompt, true, 4096));
+    }
+
+    /** Failure ka readable reason (key/raw error kabhi nahi). Jaise "AI quota reached". */
+    public static String describeFailure(Throwable ex) {
+        if (ex instanceof RestClientResponseException r) {
+            int s = r.getStatusCode().value();
+            if (s == 429) return "AI quota reached";
+            if (s >= 500) return "AI service unavailable (HTTP " + s + ")";
+            return "AI request rejected (HTTP " + s + ")";
+        }
+        if (ex instanceof ResourceAccessException) {
+            for (Throwable t = ex; t != null; t = t.getCause()) {
+                if (t instanceof HttpTimeoutException || t instanceof SocketTimeoutException) {
+                    return "AI request timed out";
+                }
+            }
+            return "AI service not reachable";
+        }
+        if (ex instanceof IllegalStateException && ex.getMessage() != null && ex.getMessage().startsWith(KEY_MISSING)) {
+            return KEY_MISSING;
+        }
+        return "AI step failed (" + ex.getClass().getSimpleName() + ")";
+    }
+
+    // ---------- core call with retry ----------
+
+    private String callGemini(String systemPrompt, String userPrompt, boolean jsonMode, int maxOutputTokens) {
+        long waitMs = FIRST_WAIT_MS;
         for (int attempt = 1; ; attempt++) {
             try {
-                return callGeminiOnce(systemPrompt, userPrompt, jsonMode);
-            } catch (org.springframework.web.client.ResourceAccessException ex) {
-                if (attempt >= maxAttempts) {
+                return callGeminiOnce(systemPrompt, userPrompt, jsonMode, maxOutputTokens);
+            } catch (ResourceAccessException | RestClientResponseException ex) {
+                // Timeout par retry nahi: model already slow hai, dobara bhejne se wait double hota hai.
+                boolean retryable = ex instanceof ResourceAccessException
+                        ? !"AI request timed out".equals(describeFailure(ex))
+                        : ((RestClientResponseException) ex).getStatusCode().is5xxServerError();
+                if (!retryable || attempt >= MAX_ATTEMPTS) {
                     throw ex;
                 }
-                log.warn("Gemini network error: {}. Retry {}/{} after {} ms",
-                        ex.getMessage(), attempt, maxAttempts - 1, waitMs);
+                log.warn("Gemini call failed ({}). Retry {}/{} after {} ms",
+                        describeFailure(ex), attempt, MAX_ATTEMPTS - 1, waitMs);
                 try {
                     Thread.sleep(waitMs);
                 } catch (InterruptedException ie) {
@@ -130,42 +188,15 @@ public class GeminiLlmClient implements LlmClient {
             }
         }
     }
-    
- // ---------- retry wrapper ----------
-    private String callGemini1(String systemPrompt, String userPrompt, boolean jsonMode) {
-        int maxAttempts = 4;
-        long waitMs = 3000;
 
-        for (int attempt = 1; ; attempt++) {
-            try {
-                return callGeminiOnce(systemPrompt, userPrompt, jsonMode);
-            } catch (RestClientResponseException ex) {
-                int status = ex.getStatusCode().value();
-                boolean retryable = status == 503 || status == 429 || status == 500;
-                if (!retryable || attempt >= maxAttempts) {
-                    throw ex;
-                }
-                log.warn("Gemini returned {}. Retry {}/{} after {} ms", status, attempt, maxAttempts - 1, waitMs);
-                try {
-                    Thread.sleep(waitMs);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw ex;
-                }
-                waitMs *= 2;
-            }
-        }
-    }
-
-    // ---------- single call (purani body, sirf naam badla) ----------
-    private String callGeminiOnce(String systemPrompt, String userPrompt, boolean jsonMode) {
+    private String callGeminiOnce(String systemPrompt, String userPrompt, boolean jsonMode, int maxOutputTokens) {
         if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("GEMINI_API_KEY is not set");
+            throw new IllegalStateException(KEY_MISSING + " (GEMINI_API_KEY)");
         }
 
         Map<String, Object> generationConfig = new LinkedHashMap<>();
         generationConfig.put("temperature", temperature);
-        generationConfig.put("maxOutputTokens", 16384);
+        generationConfig.put("maxOutputTokens", maxOutputTokens);
         if (jsonMode) {
             generationConfig.put("responseMimeType", "application/json");
         }
@@ -176,17 +207,16 @@ public class GeminiLlmClient implements LlmClient {
         body.put("generationConfig", generationConfig);
 
         try {
-        	byte[] bytes = restClient.post()
-        	        .uri("/models/{model}:generateContent", model)
-        	        .header("x-goog-api-key", apiKey)
-        	        .contentType(MediaType.APPLICATION_JSON)
-        	        .accept(MediaType.APPLICATION_JSON)
-        	        .body(body)
-        	        .retrieve()
-        	        .body(byte[].class);
+            byte[] bytes = restClient.post()
+                    .uri("/models/{model}:generateContent", model)
+                    .header("x-goog-api-key", apiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(byte[].class);
 
-        	String raw = bytes == null ? null : new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-
+            String raw = bytes == null ? null : new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
             if (raw == null || raw.isBlank()) {
                 throw new IllegalStateException("Gemini returned an empty body");
             }
@@ -203,49 +233,6 @@ public class GeminiLlmClient implements LlmClient {
             String text = response.path("candidates").path(0)
                     .path("content").path("parts").path(0)
                     .path("text").textValue();
-
-            if (text == null) {
-                log.error("Gemini returned no text. Full response: {}", response);
-                throw new IllegalStateException("Gemini returned an empty response: " + response);
-            }
-            return text;
-
-        } catch (RestClientResponseException ex) {
-            log.error("Gemini API returned {} : {}", ex.getStatusCode(), ex.getResponseBodyAsString());
-            throw ex;
-        }
-    }
-   /* private String callGemini(String systemPrompt, String userPrompt, boolean jsonMode) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("GEMINI_API_KEY is not set");
-        }
-
-        Map<String, Object> generationConfig = new LinkedHashMap<>();
-        generationConfig.put("temperature", temperature);
-        generationConfig.put("maxOutputTokens", 8192);
-        if (jsonMode) {
-            generationConfig.put("responseMimeType", "application/json");
-        }
-
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("systemInstruction", Map.of("parts", List.of(Map.of("text", systemPrompt))));
-        body.put("contents", List.of(Map.of("role", "user", "parts", List.of(Map.of("text", userPrompt)))));
-        body.put("generationConfig", generationConfig);
-
-        try {
-            JsonNode response = restClient.post()
-                    .uri("/models/{model}:generateContent", model)
-                    .header("x-goog-api-key", apiKey)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .body(body)
-                    .retrieve()
-                    .body(JsonNode.class);
-
-            String text = response.path("candidates").path(0)
-                    .path("content").path("parts").path(0)
-                    .path("text").textValue();
-
             if (text == null) {
                 log.error("Gemini returned no text. Full response: {}", response);
                 throw new IllegalStateException("Gemini returned an empty response");
@@ -253,12 +240,26 @@ public class GeminiLlmClient implements LlmClient {
             return text;
 
         } catch (RestClientResponseException ex) {
-            log.error("Gemini API returned {} : {}", ex.getStatusCode(), ex.getResponseBodyAsString());
+            log.error("Gemini API returned {}", ex.getStatusCode());
             throw ex;
         }
-    }*/
+    }
 
-    // ---------- prompt ----------
+    private JsonNode parseJson(String text) {
+        // ```json fences hata do agar model ne lagaye hon
+        String cleaned = text.trim();
+        if (cleaned.startsWith("```")) {
+            cleaned = cleaned.replaceFirst("^```(?:json)?\\s*", "").replaceFirst("\\s*```$", "");
+        }
+        try {
+            return mapper.readTree(cleaned);
+        } catch (Exception ex) {
+            log.error("Could not parse Gemini reply as JSON", ex);
+            throw ex;
+        }
+    }
+
+    // ---------- purana prompt (analyze) ----------
     private String buildUserPrompt(LlmPayload payload) {
         // Employee names are NOT sent, only employee_code (free tier: do not share personal data)
         List<Map<String, Object>> candidates = new ArrayList<>();

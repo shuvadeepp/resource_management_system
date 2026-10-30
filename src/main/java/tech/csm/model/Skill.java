@@ -20,6 +20,20 @@ public class Skill {
     @Column(name = "skill_name")
     private String skillName;
 
+    // Same category = related skill ("transferable, needs validation") matching me.
+    // JSON me nahi bhejte taaki /api/skills ka shape na badle.
+    @Column(name = "skill_category")
+    @JsonIgnore
+    private String skillCategory;
+
+	public String getSkillCategory() {
+		return skillCategory;
+	}
+
+	public void setSkillCategory(String skillCategory) {
+		this.skillCategory = skillCategory;
+	}
+
 
 	public Integer getSkillId() {
 		return skillId;
