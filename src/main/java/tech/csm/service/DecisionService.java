@@ -1,6 +1,7 @@
 package tech.csm.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -205,9 +206,10 @@ public class DecisionService {
         a.setEmployeeId(req.employeeId());
         a.setRequirementId(req.requirementId());
         a.setAllocationPercentage(req.allocationPercentage() != null ? req.allocationPercentage() : BigDecimal.valueOf(100));
-        a.setAllocationStatus("PROPOSED");
         a.setStartDate(req.startDate());
         a.setEndDate(req.endDate());
+        // PROPOSED legacy hai: start aa chuka -> ACTIVE, warna PLANNED
+        a.setAllocationStatus(AllocationStatusJob.statusFor(a, LocalDate.now()));
         a.setCreatedBy(userId);
         EmployeeAllocation saved = employeeAllocationRepository.save(a);
 

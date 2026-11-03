@@ -196,7 +196,8 @@ public class CandidatePoolService {
                     skillsByEmployee.getOrDefault(e.getEmployeeId(), List.of()),
                     ra != null ? ra.getAvailabilityStatus() : null,
                     ra != null ? formatDate(ra.getAvailableFrom()) : null,
-                    ra != null ? ra.getAvailableCapacityPercentage() : null));
+                    ra != null ? ra.getAvailableCapacityPercentage() : null,
+                    null));
         }
         return new ArrayList<>(ordered.values());
     }

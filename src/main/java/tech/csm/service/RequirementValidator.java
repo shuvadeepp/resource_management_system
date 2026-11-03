@@ -60,6 +60,11 @@ public class RequirementValidator {
             fields.put("joining_date", "required");
         }
 
+        // Window = joining_date + duration_months; na ho to open-ended
+        if (r.durationMonths() != null && r.durationMonths() < 1) {
+            fields.put("duration_months", "must be 1 or more (leave it out for open-ended)");
+        }
+
         if (!fields.isEmpty()) {
             throw new RequirementValidationException(
                     "Missing or invalid: " + String.join(", ", fields.keySet()), fields);

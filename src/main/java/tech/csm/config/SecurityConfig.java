@@ -53,6 +53,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/auth/**", "/error").permitAll()
 
+                // Tagged person ko release karna (allocation khatam / approval withdraw) - sirf admin
+                .requestMatchers(HttpMethod.POST, "/api/tagged-people/release").hasRole("ADMIN")
+
                 .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("USER", "ADMIN","PROJECT_MANAGER","LK_ADMIN",
                 		"RESOURCE_MANAGER","SKILL_REVIEWER")
                 .requestMatchers(HttpMethod.POST, "/api/**").hasAnyRole("USER", "ADMIN","PROJECT_MANAGER")

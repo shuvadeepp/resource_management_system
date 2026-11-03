@@ -130,6 +130,10 @@ public class MatchScorer {
         Candidate c = s.candidate();
         String exp = c.experienceYears() != null ? trimNumber(c.experienceYears()) + " years of experience" : "Experience not available";
         String avail = c.availabilityStatus() != null ? c.availabilityStatus().toLowerCase().replace('_', ' ') : "not available";
+        if (c.windowFreePercentage() != null && c.windowFreePercentage().compareTo(BigDecimal.valueOf(100)) < 0) {
+            avail += " (" + c.windowFreePercentage().stripTrailingZeros().toPlainString()
+                    + "% free in the requirement window)";
+        }
         return first + " " + exp + ", availability: " + avail + ".";
     }
 
@@ -192,13 +196,14 @@ public class MatchScorer {
 
     private double availabilityPart(Candidate c) {
         String status = c.availabilityStatus();
-        if (status == null) return 5;
-        return switch (status.toUpperCase()) {
+        double part = status == null ? 5 : switch (status.toUpperCase()) {
             case "BENCH" -> 10;
             case "PARTIALLY_AVAILABLE" -> c.capacityPercentage() != null
                     ? 10 * Math.min(100, c.capacityPercentage().doubleValue()) / 100 : 5;
             default -> 0; // ALLOCATED, UNAVAILABLE
         };
+        // Requirement window me pehle se partly allocated -> availability utni hi kam
+        return c.windowFreePercentage() == null ? part : part * c.windowFreePercentage().doubleValue() / 100;
     }
 
     private double evidenceWeight(String validationStatus) {

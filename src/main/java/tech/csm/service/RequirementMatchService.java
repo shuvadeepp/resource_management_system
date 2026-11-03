@@ -48,7 +48,8 @@ public class RequirementMatchService {
     public record Result(HttpStatus status, Object body) {
     }
 
-    private record Prepared(Spec spec, List<Scored> pool) {
+    private record Prepared(Spec spec, List<Scored> pool, Map<Integer, List<Map<String, Object>>> tags,
+                            Map<String, Object> taggedPeople) {
     }
 
     private final RequirementService requirementService;
@@ -59,6 +60,7 @@ public class RequirementMatchService {
     private final CurrentUserService currentUser;
     private final AuditService audit;
     private final RequirementValidator validator;
+    private final TaggedPeopleService taggedPeople;
 
     public RequirementMatchService(RequirementService requirementService,
                                    CandidatePoolService candidatePool,
@@ -67,7 +69,8 @@ public class RequirementMatchService {
                                    MatchingWorker worker,
                                    CurrentUserService currentUser,
                                    AuditService audit,
-                                   RequirementValidator validator) {
+                                   RequirementValidator validator,
+                                   TaggedPeopleService taggedPeople) {
         this.requirementService = requirementService;
         this.candidatePool = candidatePool;
         this.engine = engine;
@@ -76,6 +79,7 @@ public class RequirementMatchService {
         this.currentUser = currentUser;
         this.audit = audit;
         this.validator = validator;
+        this.taggedPeople = taggedPeople;
     }
 
     /** clientIp controller ne request thread par nikala hai (insert + har audit row me jaata hai). */
@@ -107,7 +111,7 @@ public class RequirementMatchService {
         }
 
         RequirementResponse body = new RequirementResponse("success", message, null, null,
-                candidates.size(), llmResult, false, employeesList(candidates), null, null);
+                candidates.size(), llmResult, false, employeesList(candidates), null, null, null);
         return new Result(HttpStatus.OK, body);
     }
 
@@ -135,7 +139,7 @@ public class RequirementMatchService {
                     ? MatchingPersistenceService.COMPLETED_WITH_ERRORS : MatchingPersistenceService.COMPLETED;
             RequirementResponse body = new RequirementResponse("success", runMessage(outcome),
                     saved.getRequirementId(), saved.getStatus(), outcome.poolSize(),
-                    llmResult(outcome, results), true, null, runId, runStatus);
+                    llmResult(outcome, results, p.tags()), true, null, runId, runStatus, p.taggedPeople());
             return new Result(HttpStatus.CREATED, body);
         } catch (RuntimeException ex) {
             log.error("Sync matching run {} failed", runId, ex);
@@ -176,6 +180,7 @@ public class RequirementMatchService {
         body.put("run_status", MatchingPersistenceService.QUEUED);
         body.put("employees_sent", p.pool().size());
         body.put("saved", true);
+        body.put("tagged_people", p.taggedPeople());
         return new Result(HttpStatus.ACCEPTED, body);
     }
 
@@ -185,7 +190,39 @@ public class RequirementMatchService {
         CandidatePoolService.PoolData data = candidatePool.loadForMatching(
                 r.designation(), r.department(), r.minimumExperienceYears());
         Spec spec = candidatePool.specFromRequest(r.requiredSkills(), r.minimumExperienceYears(), data.skillsByName());
-        return new Prepared(spec, engine.buildPool(spec, data.candidates()));
+        boolean includePending = Boolean.TRUE.equals(r.includeApprovedPending());
+        TaggedPeopleService.Result tagged = taggedPeople.apply(data.candidates(),
+                TaggedPeopleService.Window.of(r.joiningDate(), r.durationMonths()), includePending);
+        return new Prepared(spec, engine.buildPool(spec, tagged.pool()), tagged.tagsByEmployee(),
+                taggedPeopleBody(tagged, spec, includePending));
+    }
+
+    /** Sirf wahi tagged log jo skills ke hisaab se pool me aate - baaki ka tag kisi kaam ka nahi. */
+    private Map<String, Object> taggedPeopleBody(TaggedPeopleService.Result t, Spec spec, boolean includePending) {
+        List<Map<String, Object>> excluded = t.excluded().stream()
+                .filter(x -> engine.wouldQualify(spec, x.candidate()))
+                .map(RequirementMatchService::taggedEntry).toList();
+        List<Map<String, Object>> included = t.included().stream()
+                .filter(x -> engine.wouldQualify(spec, x.candidate()))
+                .map(RequirementMatchService::taggedEntry).toList();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("window", t.window().toMap());
+        m.put("include_approved_pending", includePending);
+        m.put("excluded_count", excluded.size());
+        m.put("excluded", excluded);
+        m.put("included", included);
+        return m;
+    }
+
+    private static Map<String, Object> taggedEntry(TaggedPeopleService.Tagged t) {
+        Candidate c = t.candidate();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("employee_id", c.employeeId());
+        m.put("employee_code", c.employeeCode());
+        m.put("resource_name", c.name());
+        m.put("window_free_percentage", c.windowFreePercentage());
+        m.put("tags", t.tags());
+        return m;
     }
 
     private String runMessage(Outcome o) {
@@ -200,7 +237,7 @@ public class RequirementMatchService {
     }
 
     /** Purana llm_result shape (matches[] ke andar wahi keys) + matching_result_id, rank_position, scored_by. */
-    private JsonNode llmResult(Outcome o, List<MatchingResult> saved) {
+    private JsonNode llmResult(Outcome o, List<MatchingResult> saved, Map<Integer, List<Map<String, Object>>> tags) {
         ObjectNode root = MAPPER.createObjectNode();
         root.put("total_qualified_matches", o.matches().size());
         ArrayNode matches = root.putArray("matches");
@@ -250,6 +287,10 @@ public class RequirementMatchService {
                 ln.put("resource_type", li.resourceType());
             }
             m.put("scored_by", fm.scoredBy());
+            List<Map<String, Object>> personTags = tags.get(c.employeeId());
+            if (personTags != null) {
+                m.set("tags", MAPPER.valueToTree(personTags));
+            }
         }
         root.put("scored_by", MatchingData.AI_USED.equals(o.aiStatus()) ? "AI" : "RULES");
         root.put("note", switch (o.aiStatus()) {

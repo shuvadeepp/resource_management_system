@@ -26,12 +26,15 @@ public record RequirementRequest(
         @JsonProperty("work_mode") String workMode,
         @JsonProperty("duration_months") Integer durationMonths,
         @JsonProperty("headcount") Integer headcount,
-        @JsonProperty("priority") String priority
+        @JsonProperty("priority") String priority,
+
+        // true = APPROVED_PENDING log bhi pool me (tag ke saath). Default false.
+        @JsonProperty("include_approved_pending") Boolean includeApprovedPending
 ) {
 
     /** Body bilkul na aaye (POST bina body) to isse "sab employees, koi filter nahi" maana jaata hai. */
     public static RequirementRequest empty() {
         return new RequirementRequest(null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
     }
 }

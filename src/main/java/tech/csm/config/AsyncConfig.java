@@ -4,15 +4,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
  * Background matching runs (POST /api/requirements?async=true) isi chhote
  * pool par chalte hain. Pool chhota rakha hai: Gemini free tier par ek saath
- * zyada calls ka koi fayda nahi.
+ * zyada calls ka koi fayda nahi. Scheduling: AllocationStatusJob (roz raat).
  */
 @Configuration
 @EnableAsync
+@EnableScheduling
 public class AsyncConfig {
 
     @Bean(name = "matchingExecutor")

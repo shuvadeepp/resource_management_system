@@ -23,6 +23,7 @@ public class RequirementResponse {
     private final List<Map<String, Object>> employees;
     private final Integer matchingRunId;
     private final String runStatus;
+    private final Map<String, Object> taggedPeople;
 
     @JsonCreator
     public RequirementResponse(
@@ -32,12 +33,13 @@ public class RequirementResponse {
             @JsonProperty("requirement_status") String requirementStatus,
             @JsonProperty("employees_sent") int employeesSent,
             @JsonProperty("llm_result") JsonNode llmResult) {
-        this(status, message, requirementId, requirementStatus, employeesSent, llmResult, null, null, null, null);
+        this(status, message, requirementId, requirementStatus, employeesSent, llmResult, null, null, null, null, null);
     }
 
     public RequirementResponse(String status, String message, Integer requirementId, String requirementStatus,
                                int employeesSent, JsonNode llmResult, Boolean saved,
-                               List<Map<String, Object>> employees, Integer matchingRunId, String runStatus) {
+                               List<Map<String, Object>> employees, Integer matchingRunId, String runStatus,
+                               Map<String, Object> taggedPeople) {
         this.status = status;
         this.message = message;
         this.requirementId = requirementId;
@@ -48,6 +50,7 @@ public class RequirementResponse {
         this.employees = employees;
         this.matchingRunId = matchingRunId;
         this.runStatus = runStatus;
+        this.taggedPeople = taggedPeople;
     }
 
     @JsonProperty("status")
@@ -83,4 +86,9 @@ public class RequirementResponse {
     @JsonProperty("employees")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public List<Map<String, Object>> getEmployees() { return employees; }
+
+    // Window + pool se bahar (excluded) / tag ke saath pool me (included) log
+    @JsonProperty("tagged_people")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Map<String, Object> getTaggedPeople() { return taggedPeople; }
 }

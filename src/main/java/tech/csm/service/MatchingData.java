@@ -20,10 +20,17 @@ public final class MatchingData {
                                  Integer proficiency, Integer experienceMonths, String validationStatus) {
     }
 
+    /** windowFreePercentage: requirement window me kitna % free hai (null = window check nahi hua, jaise list-only). */
     public record Candidate(Integer employeeId, String employeeCode, String name,
                             String designation, String department, Double experienceYears,
                             List<CandidateSkill> skills,
-                            String availabilityStatus, String availableFrom, BigDecimal capacityPercentage) {
+                            String availabilityStatus, String availableFrom, BigDecimal capacityPercentage,
+                            BigDecimal windowFreePercentage) {
+
+        public Candidate withWindowFree(BigDecimal free) {
+            return new Candidate(employeeId, employeeCode, name, designation, department, experienceYears,
+                    skills, availabilityStatus, availableFrom, capacityPercentage, free);
+        }
     }
 
     /** Requirement ki ek skill. skillId null = skill master me nahi mili (sirf preview me ho sakta hai). */

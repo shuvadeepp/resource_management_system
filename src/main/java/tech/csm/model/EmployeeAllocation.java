@@ -30,7 +30,7 @@ public class EmployeeAllocation {
     private BigDecimal allocationPercentage = BigDecimal.valueOf(100);
 
     @Column(name = "allocation_status")
-    private String allocationStatus = "PROPOSED";
+    private String allocationStatus = "PLANNED"; // PROPOSED legacy hai, AllocationStatusJob dekho
 
     @Column(name = "start_date")
     private LocalDate startDate;

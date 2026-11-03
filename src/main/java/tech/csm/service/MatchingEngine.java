@@ -68,6 +68,11 @@ public class MatchingEngine {
                 .toList();
     }
 
+    /** Skills ke hisaab se pool me aata ya nahi (tagged/excluded log report karne ke liye). */
+    public boolean wouldQualify(Spec spec, Candidate c) {
+        return scorer.eligible(scorer.score(spec, c));
+    }
+
     public Outcome score(Spec spec, List<Scored> pool) {
         if (pool.isEmpty()) {
             return new Outcome(List.of(), 0, useLlm ? MatchingData.AI_USED : MatchingData.AI_DISABLED, null);
