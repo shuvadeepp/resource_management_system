@@ -19,6 +19,8 @@ public interface AllocationDecisionRepository extends JpaRepository<AllocationDe
     // allocation_id set hai = us match ka allocation confirm ho chuka
     boolean existsByMatchingResultIdAndAllocationIdIsNotNull(Integer matchingResultId);
 
+    List<AllocationDecision> findByAllocationId(Integer allocationId);
+
     // [AllocationDecision, employee_id] - decision ka employee matching_results se aata hai
     @Query("select d, mr.employeeId from AllocationDecision d, MatchingResult mr"
             + " where mr.matchingResultId = d.matchingResultId and mr.employeeId in :employeeIds")

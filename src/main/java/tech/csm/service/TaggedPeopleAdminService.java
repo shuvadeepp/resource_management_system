@@ -1,6 +1,8 @@
 package tech.csm.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -32,13 +34,16 @@ import tech.csm.service.MatchingData.Candidate;
 
 /**
  * Tagged People screen:
- *  - list: aaj ki date par jo tagged hain - occupying allocations (PROPOSED/PLANNED/ACTIVE) jo khatam nahi hui
- *    (future wali bhi, kyunki wo apne window ki searches block karti hain) + APPROVED_PENDING approvals.
+ *  - list: aaj ki date par jo tagged hain - sirf confirmed occupying allocations (PROPOSED/PLANNED/ACTIVE) jo
+ *    khatam nahi hui (future wali bhi, kyunki wo apne window ki searches block karti hain). Approval akela
+ *    (Confirm allocation se pehle) yahan nahi aata - wo AI search ko block bhi nahi karta.
  *  - release: allocation -> shuru nahi hui to CANCELLED, warna COMPLETED (end_date = aaj);
  *    approval -> WITHDRAWN decision (DecisionService se, history rehti hai). Dono ke baad AI search me phir aata hai.
  */
 @Service
 public class TaggedPeopleAdminService {
+
+    private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 
     private final EmployeeAllocationRepository employeeAllocationRepository;
     private final AllocationDecisionRepository allocationDecisionRepository;
@@ -48,6 +53,7 @@ public class TaggedPeopleAdminService {
     private final DecisionService decisionService;
     private final CurrentUserService currentUser;
     private final AuditService audit;
+    private final AvailabilitySyncService availabilitySync;
 
     public TaggedPeopleAdminService(EmployeeAllocationRepository employeeAllocationRepository,
                                     AllocationDecisionRepository allocationDecisionRepository,
@@ -56,7 +62,8 @@ public class TaggedPeopleAdminService {
                                     CandidatePoolService candidatePool,
                                     DecisionService decisionService,
                                     CurrentUserService currentUser,
-                                    AuditService audit) {
+                                    AuditService audit,
+                                    AvailabilitySyncService availabilitySync) {
         this.employeeAllocationRepository = employeeAllocationRepository;
         this.allocationDecisionRepository = allocationDecisionRepository;
         this.requirementRepository = requirementRepository;
@@ -65,6 +72,7 @@ public class TaggedPeopleAdminService {
         this.decisionService = decisionService;
         this.currentUser = currentUser;
         this.audit = audit;
+        this.availabilitySync = availabilitySync;
     }
 
     // ---------------- list ----------------
@@ -78,18 +86,14 @@ public class TaggedPeopleAdminService {
                 allocations.computeIfAbsent(a.getEmployeeId(), k -> new ArrayList<>()).add(a);
             }
         }
-        Map<Integer, List<AllocationDecision>> pending =
-                TaggedPeopleService.pendingFromRows(allocationDecisionRepository.findAllWithEmployeeId());
-
+        // Sirf confirmed allocations - approval (SELECTED, bina allocation) akele yahan nahi dikhta
         Set<Integer> employeeIds = new HashSet<>(allocations.keySet());
-        employeeIds.addAll(pending.keySet());
         if (employeeIds.isEmpty()) {
             return List.of();
         }
 
         Set<Integer> requirementIds = new HashSet<>();
         allocations.values().forEach(l -> l.forEach(a -> requirementIds.add(a.getRequirementId())));
-        pending.values().forEach(l -> l.forEach(d -> requirementIds.add(d.getRequirementId())));
         Map<Integer, ProjectRequirement> requirements = requirementRepository.findAllById(requirementIds).stream()
                 .collect(Collectors.toMap(ProjectRequirement::getRequirementId, Function.identity()));
         Map<Integer, Project> projects = projectRepository.findAllById(requirements.values().stream()
@@ -103,9 +107,6 @@ public class TaggedPeopleAdminService {
             List<Map<String, Object>> tags = new ArrayList<>();
             for (EmployeeAllocation a : allocations.getOrDefault(empId, List.of())) {
                 tags.add(allocationTag(a, requirements, projects));
-            }
-            for (AllocationDecision d : pending.getOrDefault(empId, List.of())) {
-                tags.add(approvalTag(d, requirements, projects));
             }
             tags.sort(Comparator.comparing(t -> String.valueOf(t.get("start_date"))));
 
@@ -159,10 +160,49 @@ public class TaggedPeopleAdminService {
         Map<String, Object> v = new LinkedHashMap<>();
         v.put("allocation_status", a.getAllocationStatus());
         v.put("end_date", String.valueOf(a.getEndDate()));
-        audit.log(currentUser.currentUserId(), AuditService.TAG_RELEASED, "employee_allocations", allocationId,
+        Integer userId = currentUser.currentUserId();
+        audit.log(userId, AuditService.TAG_RELEASED, "employee_allocations", allocationId,
                 old, v, reason);
+
+        withdrawLinkedDecisions(allocationId, userId, reason);
+
+        availabilitySync.syncEmployee(a.getEmployeeId(), userId,
+                "Allocation #" + allocationId + " released (" + a.getAllocationStatus() + ")");
         return result("Allocation " + allocationId + " released (" + a.getAllocationStatus()
                 + "). Employee will appear in AI search again.");
+    }
+
+    /**
+     * Allocation release hua to us se linked SELECTED decision bhi isi row me WITHDRAWN (nayi row nahi):
+     * allocation_id null, reason/maker/date release ke. allocation_id aur decision saath badalne zaroori hain -
+     * sirf allocation_id null hota to "SELECTED bina allocation" = pending approval ban ke wapas dikh jaata.
+     * Purani values audit_logs me rehti hain.
+     */
+    private void withdrawLinkedDecisions(Integer allocationId, Integer userId, String reason) {
+        for (AllocationDecision d : allocationDecisionRepository.findByAllocationId(allocationId)) {
+            Map<String, Object> old = new LinkedHashMap<>();
+            old.put("allocation_id", d.getAllocationId());
+            old.put("decision", d.getDecision());
+            old.put("decision_reason", d.getDecisionReason());
+            old.put("decision_maker", d.getDecisionMaker());
+            old.put("decision_date", String.valueOf(d.getDecisionDate()));
+
+            d.setAllocationId(null);
+            d.setDecision("WITHDRAWN");
+            d.setDecisionReason("Released from Tagged People: " + reason);
+            d.setDecisionMaker(userId);
+            d.setDecisionDate(LocalDateTime.now(IST));
+            allocationDecisionRepository.save(d);
+
+            Map<String, Object> v = new LinkedHashMap<>();
+            v.put("allocation_id", null);
+            v.put("decision", d.getDecision());
+            v.put("decision_reason", d.getDecisionReason());
+            v.put("decision_maker", userId);
+            v.put("decision_date", String.valueOf(d.getDecisionDate()));
+            audit.log(userId, AuditService.TAG_RELEASED, "allocation_decisions", d.getAllocationDecisionId(),
+                    old, v, reason);
+        }
     }
 
     private Map<String, Object> releaseApproval(Integer decisionId, String reason) {
@@ -197,20 +237,6 @@ public class TaggedPeopleAdminService {
         m.put("matching_result_id", null);
         m.put("start_date", a.getStartDate().toString());
         m.put("end_date", a.getEndDate() != null ? a.getEndDate().toString() : null);
-        return m;
-    }
-
-    private static Map<String, Object> approvalTag(AllocationDecision d, Map<Integer, ProjectRequirement> requirements,
-                                                   Map<Integer, Project> projects) {
-        Map<String, Object> m = baseTag(TaggedPeopleService.APPROVED_PENDING, d.getRequirementId(), requirements, projects);
-        m.put("reason", "Approved (SELECTED) but not allocated yet");
-        m.put("allocation_id", null);
-        m.put("allocation_percentage", null);
-        m.put("allocation_status", null);
-        m.put("decision_id", d.getAllocationDecisionId());
-        m.put("matching_result_id", d.getMatchingResultId());
-        m.put("start_date", d.getDecisionDate() != null ? d.getDecisionDate().toLocalDate().toString() : null);
-        m.put("end_date", null);
         return m;
     }
 

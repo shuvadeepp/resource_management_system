@@ -190,15 +190,14 @@ public class RequirementMatchService {
         CandidatePoolService.PoolData data = candidatePool.loadForMatching(
                 r.designation(), r.department(), r.minimumExperienceYears());
         Spec spec = candidatePool.specFromRequest(r.requiredSkills(), r.minimumExperienceYears(), data.skillsByName());
-        boolean includePending = Boolean.TRUE.equals(r.includeApprovedPending());
         TaggedPeopleService.Result tagged = taggedPeople.apply(data.candidates(),
-                TaggedPeopleService.Window.of(r.joiningDate(), r.durationMonths()), includePending);
+                TaggedPeopleService.Window.of(r.joiningDate(), r.durationMonths()));
         return new Prepared(spec, engine.buildPool(spec, tagged.pool()), tagged.tagsByEmployee(),
-                taggedPeopleBody(tagged, spec, includePending));
+                taggedPeopleBody(tagged, spec));
     }
 
     /** Sirf wahi tagged log jo skills ke hisaab se pool me aate - baaki ka tag kisi kaam ka nahi. */
-    private Map<String, Object> taggedPeopleBody(TaggedPeopleService.Result t, Spec spec, boolean includePending) {
+    private Map<String, Object> taggedPeopleBody(TaggedPeopleService.Result t, Spec spec) {
         List<Map<String, Object>> excluded = t.excluded().stream()
                 .filter(x -> engine.wouldQualify(spec, x.candidate()))
                 .map(RequirementMatchService::taggedEntry).toList();
@@ -207,7 +206,8 @@ public class RequirementMatchService {
                 .map(RequirementMatchService::taggedEntry).toList();
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("window", t.window().toMap());
-        m.put("include_approved_pending", includePending);
+        // Approved-pending ab hamesha pool me (sirf info tag) - field purane frontend ke liye rakha hai
+        m.put("include_approved_pending", true);
         m.put("excluded_count", excluded.size());
         m.put("excluded", excluded);
         m.put("included", included);

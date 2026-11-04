@@ -32,10 +32,13 @@ public class AllocationStatusJob implements ApplicationRunner {
 
     private final EmployeeAllocationRepository employeeAllocationRepository;
     private final AuditService audit;
+    private final AvailabilitySyncService availabilitySync;
 
-    public AllocationStatusJob(EmployeeAllocationRepository employeeAllocationRepository, AuditService audit) {
+    public AllocationStatusJob(EmployeeAllocationRepository employeeAllocationRepository, AuditService audit,
+                               AvailabilitySyncService availabilitySync) {
         this.employeeAllocationRepository = employeeAllocationRepository;
         this.audit = audit;
+        this.availabilitySync = availabilitySync;
     }
 
     @Override
@@ -95,6 +98,15 @@ public class AllocationStatusJob implements ApplicationRunner {
             }
         } catch (Exception ex) {
             log.error("Allocation status job failed", ex);
+        }
+        // Status change na bhi hua ho tab bhi - COMPLETED allocation ki capacity wapas aur purana stale data theek
+        try {
+            int rows = availabilitySync.syncAllWithAllocations("Allocation status sync");
+            if (rows > 0) {
+                log.info("Availability sync inserted {} resource_availability row(s)", rows);
+            }
+        } catch (Exception ex) {
+            log.error("Availability sync failed", ex);
         }
     }
 }

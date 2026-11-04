@@ -28,7 +28,7 @@ public record RequirementRequest(
         @JsonProperty("headcount") Integer headcount,
         @JsonProperty("priority") String priority,
 
-        // true = APPROVED_PENDING log bhi pool me (tag ke saath). Default false.
+        // Ab ignore hota hai: APPROVED_PENDING log hamesha pool me (tag ke saath). Purane frontend ke liye accept.
         @JsonProperty("include_approved_pending") Boolean includeApprovedPending
 ) {
 

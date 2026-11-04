@@ -50,6 +50,7 @@ public class DecisionService {
     private final CandidatePoolService candidatePool;
     private final CurrentUserService currentUser;
     private final AuditService audit;
+    private final AvailabilitySyncService availabilitySync;
 
     public DecisionService(MatchingResultRepository matchingResultRepository,
                            MatchingRunRepository matchingRunRepository,
@@ -58,7 +59,8 @@ public class DecisionService {
                            RequirementQueryService queryService,
                            CandidatePoolService candidatePool,
                            CurrentUserService currentUser,
-                           AuditService audit) {
+                           AuditService audit,
+                           AvailabilitySyncService availabilitySync) {
         this.matchingResultRepository = matchingResultRepository;
         this.matchingRunRepository = matchingRunRepository;
         this.allocationDecisionRepository = allocationDecisionRepository;
@@ -67,6 +69,7 @@ public class DecisionService {
         this.candidatePool = candidatePool;
         this.currentUser = currentUser;
         this.audit = audit;
+        this.availabilitySync = availabilitySync;
     }
 
     public static boolean isValidDecision(String decision) {
@@ -225,6 +228,8 @@ public class DecisionService {
         v.put("start_date", String.valueOf(req.startDate()));
         v.put("decision_id", req.decisionId());
         audit.log(userId, AuditService.ALLOCATION_CONFIRMED, "employee_allocations", saved.getAllocationId(), null, v, null);
+
+        availabilitySync.syncEmployee(req.employeeId(), userId, "Allocation #" + saved.getAllocationId() + " confirmed");
         return saved;
     }
 

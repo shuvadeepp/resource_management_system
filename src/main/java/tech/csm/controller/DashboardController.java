@@ -69,7 +69,7 @@ public class DashboardController {
                 .filter(mr -> !decidedMatchingResultIds.contains(mr.getMatchingResultId()))
                 .count();
 
-        long availableEmployees = resourceAvailabilityRepository.countByAvailabilityStatusIn(
+        long availableEmployees = resourceAvailabilityRepository.countCurrentByAvailabilityStatusIn(
                 List.of("BENCH", "PARTIALLY_AVAILABLE"));
 
         Map<String, Object> body = new LinkedHashMap<>();

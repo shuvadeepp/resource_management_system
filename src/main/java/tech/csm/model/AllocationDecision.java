@@ -42,7 +42,8 @@ public class AllocationDecision {
     @Column(name = "decision_maker")
     private Integer decisionMaker;
 
-    @Column(name = "decision_date", insertable = false, updatable = false)
+    // Insert par DB default (CURRENT_TIMESTAMP); Tagged People release par update hota hai
+    @Column(name = "decision_date", insertable = false)
     private LocalDateTime decisionDate;
 
     @Column(name = "created_at", insertable = false, updatable = false)
@@ -70,6 +71,7 @@ public class AllocationDecision {
     public void setDecisionMaker(Integer v) { this.decisionMaker = v; }
 
     public LocalDateTime getDecisionDate() { return decisionDate; }
+    public void setDecisionDate(LocalDateTime v) { this.decisionDate = v; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

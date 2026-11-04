@@ -47,6 +47,7 @@ public class AuditService {
     public static final String ALLOCATION_CONFIRMED = "ALLOCATION_CONFIRMED";
     public static final String ALLOCATION_STATUS_SYNCED = "ALLOCATION_STATUS_SYNCED";
     public static final String TAG_RELEASED = "TAGGED_PERSON_RELEASED";
+    public static final String AVAILABILITY_SYNCED = "AVAILABILITY_SYNCED";
     public static final String LEARNING_REVIEWED = "LEARNING_RECOMMENDATION_REVIEWED";
     public static final String LEARNING_GENERATED = "LEARNING_RECOMMENDATIONS_GENERATED";
 

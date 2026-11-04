@@ -102,24 +102,32 @@ public class Employees implements Serializable {
         return department == null ? null : department.getDepartmentName();
     }
     
-    @JsonProperty("availabilityStatus")
-    public String getAvailabilityStatus() {
+    // resource_availability history table hai - current = sabse nayi (max availability_id) row, get(0) nahi
+    private ResourceAvailability currentAvailability() {
         if (resourceAvailability == null || resourceAvailability.isEmpty()) {
             return null;
         }
+        return resourceAvailability.stream()
+                .max(java.util.Comparator.comparing(ResourceAvailability::getAvailabilityId))
+                .orElse(null);
+    }
 
-        return resourceAvailability.get(0).getAvailabilityStatus();
+    @JsonProperty("availabilityStatus")
+    public String getAvailabilityStatus() {
+        ResourceAvailability current = currentAvailability();
+        return current == null ? null : current.getAvailabilityStatus();
     }
 
     @JsonProperty("availableFrom")
     public String getAvailableFrom() {
-        if (resourceAvailability == null || resourceAvailability.isEmpty()) {
+        ResourceAvailability current = currentAvailability();
+        if (current == null) {
             return null;
         }
 
         // Pehle ye galti se getAvailableUntil() padh raha tha - available_from column
         // alag se available hai ab, wahi sahi value hai.
-        Date date = resourceAvailability.get(0).getAvailableFrom();
+        Date date = current.getAvailableFrom();
 
         if (date == null) {
             return null;
@@ -130,10 +138,8 @@ public class Employees implements Serializable {
 
     @JsonProperty("availableCapacityPercentage")
     public java.math.BigDecimal getAvailableCapacityPercentage() {
-        if (resourceAvailability == null || resourceAvailability.isEmpty()) {
-            return null;
-        }
-        return resourceAvailability.get(0).getAvailableCapacityPercentage();
+        ResourceAvailability current = currentAvailability();
+        return current == null ? null : current.getAvailableCapacityPercentage();
     }
 
     @JsonProperty("skills")

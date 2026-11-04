@@ -28,8 +28,8 @@ import tech.csm.service.MatchingData.Candidate;
  *      Kam ho -> PARTIALLY_ALLOCATED, pool me rehta hai, aur (100 - peak)% free capacity score me jaati hai.
  *      joining_date se pehle khatam / window ke baad shuru hone wali allocations ignore.
  *  (b) Kisi requirement par (employee, requirement) ka latest decision SELECTED aur allocation_id null
- *      -> APPROVED_PENDING. Dates se farak nahi padta; default pool se bahar,
- *      include_approved_pending=true par pool me (tag ke saath).
+ *      -> APPROVED_PENDING. Sirf info tag: hamesha pool me rehta hai. Block / Tagged People sirf confirmed
+ *      allocation (Confirm allocation) ke baad - approval akele kisi ko block nahi karta.
  * "Latest" = sabse bada allocation_decision_id: decision_date me IST/UTC dono mix hain, us par order bharosemand nahi.
  */
 @Service
@@ -93,7 +93,7 @@ public class TaggedPeopleService {
     }
 
     @Transactional(readOnly = true)
-    public Result apply(List<Candidate> candidates, Window window, boolean includeApprovedPending) {
+    public Result apply(List<Candidate> candidates, Window window) {
         if (candidates.isEmpty()) {
             return new Result(window, List.of(), List.of(), List.of());
         }
@@ -119,7 +119,6 @@ public class TaggedPeopleService {
             }
             for (AllocationDecision d : pendingByEmployee.getOrDefault(c.employeeId(), List.of())) {
                 tags.add(approvalTag(d));
-                out |= !includeApprovedPending;
             }
 
             Candidate withFree = c.withWindowFree(free);
