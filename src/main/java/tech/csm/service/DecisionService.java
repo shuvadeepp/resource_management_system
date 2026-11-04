@@ -7,9 +7,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,12 +23,15 @@ import tech.csm.model.AllocationDecision;
 import tech.csm.model.EmployeeAllocation;
 import tech.csm.model.MatchingResult;
 import tech.csm.model.MatchingRun;
+import tech.csm.model.ProjectRequirement;
 import tech.csm.model.User;
 import tech.csm.repository.AllocationDecisionRepository;
 import tech.csm.repository.EmployeeAllocationRepository;
 import tech.csm.repository.MatchingResultRepository;
 import tech.csm.repository.MatchingRunRepository;
+import tech.csm.repository.ProjectRequirementRepository;
 import tech.csm.service.MatchingData.Candidate;
+
 
 /**
  * Shortlist -> Approve / Hold / Reject -> Confirm allocation.
@@ -50,6 +55,9 @@ public class DecisionService {
     private final CandidatePoolService candidatePool;
     private final CurrentUserService currentUser;
     private final AuditService audit;
+    
+    @Autowired
+    private ProjectRequirementRepository projectRequirementRepository;
 
     public DecisionService(MatchingResultRepository matchingResultRepository,
                            MatchingRunRepository matchingRunRepository,
@@ -182,6 +190,73 @@ public class DecisionService {
         }
         return out;
     }
+    
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getAllDecisions() {
+        List<AllocationDecision> decisions = allocationDecisionRepository.findAll();
+        if (decisions.isEmpty()) {
+            return List.of();
+        }
+        
+        Map<Integer, MatchingResult> results = matchingResultRepository.findAllById(
+                decisions.stream()
+                         .map(AllocationDecision::getMatchingResultId)
+                         .collect(Collectors.toSet())
+        ).stream().collect(Collectors.toMap(MatchingResult::getMatchingResultId, r -> r));
+        
+        Map<Integer, Candidate> candidates = candidatePool.loadByIds(
+                results.values().stream()
+                       .map(MatchingResult::getEmployeeId)
+                       .collect(Collectors.toSet())
+        );
+        
+        Map<Integer, User> makers = queryService.users(
+                decisions.stream()
+                         .map(AllocationDecision::getDecisionMaker)
+                         .collect(Collectors.toSet())
+        );
+
+        // Fetch and map Project Requirements in bulk using requirementId
+        Map<Integer, ProjectRequirement> requirements = projectRequirementRepository.findAllById(
+                decisions.stream()
+                         .map(AllocationDecision::getRequirementId)
+                         .filter(Objects::nonNull)
+                         .collect(Collectors.toSet())
+        ).stream().collect(Collectors.toMap(ProjectRequirement::getRequirementId, req -> req));
+
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (AllocationDecision d : decisions) {
+            MatchingResult mr = results.get(d.getMatchingResultId());
+            Candidate c = mr != null ? candidates.get(mr.getEmployeeId()) : null;
+            User u = makers.get(d.getDecisionMaker());
+            ProjectRequirement pr = requirements.get(d.getRequirementId());
+
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("allocationDecisionId", d.getAllocationDecisionId());
+            m.put("allocationId", d.getAllocationId());
+            m.put("createdAt", d.getCreatedAt());
+            m.put("decision", d.getDecision());
+            m.put("decisionDate", d.getDecisionDate());
+            m.put("decisionMaker", d.getDecisionMaker());
+            m.put("decisionReason", d.getDecisionReason());
+            m.put("matchingResultId", d.getMatchingResultId());
+            m.put("requirementId", d.getRequirementId());
+            m.put("matching_result_id", d.getMatchingResultId());
+            m.put("employee_id", mr != null ? mr.getEmployeeId() : null);
+            m.put("employee_code", c != null ? c.employeeCode() : null);
+            m.put("resource_name", c != null ? c.name() : null);
+            m.put("decision_maker_name", u != null ? u.getFullName() : null);
+            
+            // Added Project Requirement fields
+            m.put("role_name", pr != null ? pr.getRoleName() : null);
+            m.put("project_id", pr != null ? pr.getProjectId() : null);
+            m.put("requirement_code", pr != null ? pr.getRequirementCode() : null);
+            
+            out.add(m);
+        }
+        return out;
+    }
+
 
     // ---------------- allocation ----------------
 
