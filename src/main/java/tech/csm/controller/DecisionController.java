@@ -55,6 +55,12 @@ public class DecisionController {
     public ResponseEntity<?> listDecisions(@RequestParam Integer requirementId) {
         return ResponseEntity.ok(decisionService.listDecisions(requirementId));
     }
+    
+ // Ek requirement ke decisions ki history (newest first).
+    @GetMapping("/alldecisions")
+    public ResponseEntity<?> getAllDecisions() {
+        return ResponseEntity.ok(decisionService.getAllDecisions());
+    }
 
     // "Confirm allocation" - yahi par employee_allocations me row banti hai. Kabhi automatic nahi.
     @PostMapping("/allocations")
