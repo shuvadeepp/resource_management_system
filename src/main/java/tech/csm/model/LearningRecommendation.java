@@ -1,5 +1,6 @@
 package tech.csm.model;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
@@ -58,6 +59,47 @@ public class LearningRecommendation {
     @Column(name = "review_comments", columnDefinition = "TEXT")
     private String reviewComments;
 
+    // ---- Module 5 pathway fields ----
+
+    /** Kaun sa gap band karti hai (skill_gaps). Purane runs ki rows me null. */
+    @Column(name = "skill_gap_id")
+    private Integer skillGapId;
+
+    /** Sirf tab jab L&K repository se aayi ho. */
+    @Column(name = "learning_resource_id")
+    private Integer learningResourceId;
+
+    /** LK_REPOSITORY | AI_GENERATED | RULE_BASED | MANUAL */
+    @Column(name = "recommendation_source")
+    private String recommendationSource = "AI_GENERATED";
+
+    @Column(name = "ai_model_version")
+    private String aiModelVersion;
+
+    @Column(name = "priority")
+    private String priority = "MEDIUM";
+
+    @Column(name = "sequence_order")
+    private Integer sequenceOrder = 1;
+
+    @Column(name = "estimated_hours")
+    private BigDecimal estimatedHours;
+
+    @Column(name = "estimated_weeks")
+    private Integer estimatedWeeks;
+
+    @Column(name = "validation_method")
+    private String validationMethod = "KNOWLEDGE_ASSESSMENT";
+
+    @Column(name = "started_at")
+    private LocalDateTime startedAt;
+
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
+    @Column(name = "created_by")
+    private Integer createdBy;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -102,6 +144,42 @@ public class LearningRecommendation {
 
     public String getReviewComments() { return reviewComments; }
     public void setReviewComments(String v) { this.reviewComments = v; }
+
+    public Integer getSkillGapId() { return skillGapId; }
+    public void setSkillGapId(Integer v) { this.skillGapId = v; }
+
+    public Integer getLearningResourceId() { return learningResourceId; }
+    public void setLearningResourceId(Integer v) { this.learningResourceId = v; }
+
+    public String getRecommendationSource() { return recommendationSource; }
+    public void setRecommendationSource(String v) { this.recommendationSource = v; }
+
+    public String getAiModelVersion() { return aiModelVersion; }
+    public void setAiModelVersion(String v) { this.aiModelVersion = v; }
+
+    public String getPriority() { return priority; }
+    public void setPriority(String v) { this.priority = v; }
+
+    public Integer getSequenceOrder() { return sequenceOrder; }
+    public void setSequenceOrder(Integer v) { this.sequenceOrder = v; }
+
+    public BigDecimal getEstimatedHours() { return estimatedHours; }
+    public void setEstimatedHours(BigDecimal v) { this.estimatedHours = v; }
+
+    public Integer getEstimatedWeeks() { return estimatedWeeks; }
+    public void setEstimatedWeeks(Integer v) { this.estimatedWeeks = v; }
+
+    public String getValidationMethod() { return validationMethod; }
+    public void setValidationMethod(String v) { this.validationMethod = v; }
+
+    public LocalDateTime getStartedAt() { return startedAt; }
+    public void setStartedAt(LocalDateTime v) { this.startedAt = v; }
+
+    public LocalDateTime getCompletedAt() { return completedAt; }
+    public void setCompletedAt(LocalDateTime v) { this.completedAt = v; }
+
+    public Integer getCreatedBy() { return createdBy; }
+    public void setCreatedBy(Integer v) { this.createdBy = v; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

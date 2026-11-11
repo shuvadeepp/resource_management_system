@@ -1,6 +1,7 @@
 package tech.csm.service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,41 +17,57 @@ import org.springframework.transaction.annotation.Transactional;
 import tech.csm.exception.ApiException;
 import tech.csm.llm.GeminiLlmClient;
 import tech.csm.model.LearningRecommendation;
+import tech.csm.model.LearningResource;
 import tech.csm.model.MatchingResult;
 import tech.csm.model.MatchingRun;
 import tech.csm.model.ProjectRequirement;
 import tech.csm.model.Skill;
+import tech.csm.model.SkillGap;
 import tech.csm.repository.LearningRecommendationRepository;
 import tech.csm.repository.MatchingResultRepository;
 import tech.csm.repository.MatchingRunRepository;
 import tech.csm.repository.RequiredSkillRepository;
+import tech.csm.repository.SkillGapRepository;
 import tech.csm.service.MatchingData.Candidate;
 import tech.csm.service.MatchingData.Gap;
 import tech.csm.service.MatchingData.LearningItem;
+import tech.csm.service.MatchingData.ReqSkill;
 import tech.csm.service.MatchingData.Spec;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Skill gaps deterministic hain: employee ki active employee_skills vs
- * requirement ki required_skills (missing + required level se neeche).
- * LLM sirf learning action likhta hai.
+ * Skill gaps deterministic hain (Java, AI nahi). Run khatam hone par skill_gaps table me store hote
+ * hain (MatchingPersistenceService), isliye training ke baad employee ki skill badalne se purane run
+ * ke gaps nahi badalte. Jin purane runs ke skill_gaps rows nahi hain unke liye wahi gaps live
+ * (employee_skills vs required_skills) nikalte hain. LLM sirf learning action likhta hai.
  */
 @Service
 public class SkillGapService {
 
     private static final Set<String> VALID_REVIEW = Set.of("APPROVED", "REJECTED", "IN_PROGRESS", "COMPLETED");
 
-    private record Context(Spec spec, Map<Integer, Skill> skillsById) {
+    private record Context(Spec spec, Map<Integer, Skill> skillsById, String requirementPriority) {
     }
 
-    private record GapData(MatchingResult result, Candidate candidate, Context ctx, List<Gap> gaps,
-                           List<LearningRecommendation> recs) {
+    /** Ek gap ka read-model - stored row se ya purane runs ke liye live calculation se. */
+    private record GapView(Integer skillGapId, Integer skillId, String skillName, int required, Integer current,
+                           boolean mandatory, String gapType, int gapSize, String priority, String reason) {
+
+        Gap toGap() {
+            return new Gap(new ReqSkill(skillId, skillName, null, mandatory, required), current);
+        }
+    }
+
+    private record GapData(MatchingResult result, Candidate candidate, Context ctx, List<GapView> gaps,
+                           boolean stored, List<LearningRecommendation> recs) {
     }
 
     private final MatchingResultRepository matchingResultRepository;
     private final MatchingRunRepository matchingRunRepository;
     private final RequiredSkillRepository requiredSkillRepository;
     private final LearningRecommendationRepository learningRecommendationRepository;
+    private final SkillGapRepository skillGapRepository;
+    private final LearningCatalogService catalog;
     private final RequirementQueryService queryService;
     private final CandidatePoolService candidatePool;
     private final MatchScorer scorer;
@@ -64,6 +81,8 @@ public class SkillGapService {
                            MatchingRunRepository matchingRunRepository,
                            RequiredSkillRepository requiredSkillRepository,
                            LearningRecommendationRepository learningRecommendationRepository,
+                           SkillGapRepository skillGapRepository,
+                           LearningCatalogService catalog,
                            RequirementQueryService queryService,
                            CandidatePoolService candidatePool,
                            MatchScorer scorer,
@@ -76,6 +95,8 @@ public class SkillGapService {
         this.matchingRunRepository = matchingRunRepository;
         this.requiredSkillRepository = requiredSkillRepository;
         this.learningRecommendationRepository = learningRecommendationRepository;
+        this.skillGapRepository = skillGapRepository;
+        this.catalog = catalog;
         this.queryService = queryService;
         this.candidatePool = candidatePool;
         this.scorer = scorer;
@@ -94,11 +115,14 @@ public class SkillGapService {
         return toMap(data, data.recs());
     }
 
-    /** Requirement ke latest finished run ke har match ke gaps (Skill Growth screen). */
+    /**
+     * Requirement ke ek run ke har match ke gaps (Skill Growth screen). runId na diya ho to latest
+     * finished run - /requirements/{id}/matches jaisa; runId se purana run (rematch se pehle ka) dekh sakte hain.
+     */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> forRequirement(Integer requirementId) {
+    public List<Map<String, Object>> forRequirement(Integer requirementId, Integer runId) {
         ProjectRequirement req = queryService.findRequirement(requirementId);
-        MatchingRun run = queryService.resolveRun(requirementId, null);
+        MatchingRun run = queryService.resolveRun(requirementId, runId);
         if (run == null) {
             return List.of();
         }
@@ -106,18 +130,21 @@ public class SkillGapService {
         if (results.isEmpty()) {
             return List.of();
         }
+        List<Integer> resultIds = results.stream().map(MatchingResult::getMatchingResultId).toList();
         Context ctx = context(req);
         Map<Integer, Candidate> candidates = candidatePool.loadByIds(
                 results.stream().map(MatchingResult::getEmployeeId).collect(Collectors.toSet()));
         Map<Integer, List<LearningRecommendation>> recs = learningRecommendationRepository
-                .findByMatchingResultIdIn(results.stream().map(MatchingResult::getMatchingResultId).toList())
+                .findByMatchingResultIdIn(resultIds)
                 .stream().collect(Collectors.groupingBy(LearningRecommendation::getMatchingResultId));
+        Map<Integer, List<SkillGap>> stored = skillGapRepository.findByMatchingResultIdIn(resultIds)
+                .stream().collect(Collectors.groupingBy(SkillGap::getMatchingResultId));
 
         List<Map<String, Object>> out = new ArrayList<>();
         for (MatchingResult mr : results) {
             Candidate c = candidates.get(mr.getEmployeeId());
             List<LearningRecommendation> r = recs.getOrDefault(mr.getMatchingResultId(), List.of());
-            out.add(toMap(new GapData(mr, c, ctx, gapsFor(ctx, c), r), r));
+            out.add(toMap(build(mr, c, ctx, stored.getOrDefault(mr.getMatchingResultId(), List.of()), r), r));
         }
         return out;
     }
@@ -139,16 +166,26 @@ public class SkillGapService {
         old.put("review_comments", lr.getReviewComments());
 
         Integer userId = currentUser.currentUserId();
+        var now = MatchingPersistenceService.nowIst();
         lr.setReviewStatus(value);
         lr.setReviewComments(comments == null || comments.isBlank() ? null : comments.trim());
         lr.setReviewedBy(userId);
-        lr.setReviewedAt(MatchingPersistenceService.nowIst());
+        lr.setReviewedAt(now);
+        // FR-GAP-06: pathway ka start / finish time. Pehli baar hi set hota hai, baad me badalta nahi.
+        if ("IN_PROGRESS".equals(value) || "COMPLETED".equals(value)) {
+            if (lr.getStartedAt() == null) {
+                lr.setStartedAt(now);
+            }
+        }
+        if ("COMPLETED".equals(value) && lr.getCompletedAt() == null) {
+            lr.setCompletedAt(now);
+        }
         lr = learningRecommendationRepository.save(lr);
 
-        Map<String, Object> now = new LinkedHashMap<>();
-        now.put("review_status", value);
-        now.put("review_comments", lr.getReviewComments());
-        audit.log(userId, AuditService.LEARNING_REVIEWED, "learning_recommendations", learningRecommendationId, old, now, null);
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("review_status", value);
+        after.put("review_comments", lr.getReviewComments());
+        audit.log(userId, AuditService.LEARNING_REVIEWED, "learning_recommendations", learningRecommendationId, old, after, null);
 
         Map<String, Object> body = RequirementQueryService.learningMaps(List.of(lr), candidatePool.skillsById()).get(0);
         body.put("matching_result_id", lr.getMatchingResultId());
@@ -167,8 +204,8 @@ public class SkillGapService {
     public Map<String, Object> generate(Integer matchingResultId) {
         GapData data = load(matchingResultId);
         Set<Integer> covered = data.recs().stream().map(LearningRecommendation::getSkillId).collect(Collectors.toSet());
-        List<Gap> open = data.gaps().stream()
-                .filter(g -> g.skill().skillId() != null && !covered.contains(g.skill().skillId()))
+        List<GapView> open = data.gaps().stream()
+                .filter(g -> g.skillId() != null && !covered.contains(g.skillId()))
                 .toList();
 
         Map<String, Object> body = toMap(data, data.recs());
@@ -177,19 +214,70 @@ public class SkillGapService {
                     : "Every gap already has a learning recommendation");
             return body;
         }
-        if (!engine.isLlmEnabled()) {
-            body.put("note", "AI is turned off (app.matching.use-llm=false); no recommendations generated");
+
+        // FR-GAP-05: pehle approved L&K resources. Jin gaps ko resource mil gayi unke liye AI call nahi hota.
+        Map<Integer, List<LearningResource>> approved = catalog.approvedBySkill(
+                open.stream().map(GapView::skillId).collect(Collectors.toSet()));
+        List<GapView> fromCatalog = new ArrayList<>();
+        List<GapView> needAi = new ArrayList<>();
+        for (GapView v : open) {
+            (LearningCatalogService.pick(approved.get(v.skillId()), v.current(), v.required()) != null
+                    ? fromCatalog : needAi).add(v);
+        }
+
+        List<LearningItem> items = new ArrayList<>();
+        Map<Integer, String> priorityBySkill = new HashMap<>();
+        for (GapView v : fromCatalog) {
+            priorityBySkill.put(v.skillId(), v.priority());
+            // stand-in: persistence isko approved resource se replace kar deta hai
+            items.add(scorer.templateLearning(v.toGap()));
+        }
+
+        String aiNote = null;
+        if (!needAi.isEmpty()) {
+            if (!engine.isLlmEnabled()) {
+                aiNote = "AI is turned off (app.matching.use-llm=false); no recommendations generated for "
+                        + needAi.size() + " gap(s) that have no approved L&K resource";
+            } else {
+                try {
+                    items.addAll(aiItems(needAi, priorityBySkill));
+                } catch (Exception ex) {
+                    aiNote = GeminiLlmClient.describeFailure(ex) + "; no AI recommendations generated for "
+                            + needAi.size() + " gap(s) that have no approved L&K resource, try again later";
+                }
+            }
+        }
+        if (items.isEmpty()) {
+            body.put("note", aiNote != null ? aiNote : "No recommendations generated");
             return body;
         }
 
-        JsonNode reply;
-        try {
-            reply = gemini.suggestLearning(gapPayload(open));
-        } catch (Exception ex) {
-            body.put("note", GeminiLlmClient.describeFailure(ex) + "; no recommendations generated, try again later");
-            return body;
-        }
+        Integer userId = currentUser.currentUserId();
+        List<LearningRecommendation> saved = persistence.saveRecommendations(matchingResultId, items, priorityBySkill, userId);
+        audit.log(userId, AuditService.LEARNING_GENERATED, "matching_results", matchingResultId,
+                null, Map.of("created", saved.size()), null);
 
+        List<LearningRecommendation> all = new ArrayList<>(data.recs());
+        all.addAll(saved);
+        body = toMap(data, all);
+        long lk = saved.stream().filter(s -> MatchingPersistenceService.SOURCE_LK.equals(s.getRecommendationSource())).count();
+        long ai = saved.stream().filter(s -> MatchingPersistenceService.SOURCE_AI.equals(s.getRecommendationSource())).count();
+        long rules = saved.size() - lk - ai;
+        StringBuilder note = new StringBuilder("Generated " + saved.size() + " learning recommendation(s): "
+                + lk + " from the approved L&K repository, " + ai + " written by AI, " + rules + " from the rule-based template.");
+        if (ai > 0 || rules > 0) {
+            note.append(" AI and template suggestions must be reviewed by L&K against approved learning resources.");
+        }
+        if (aiNote != null) {
+            note.append(' ').append(aiNote).append('.');
+        }
+        body.put("note", note.toString());
+        return body;
+    }
+
+    /** Ek Gemini call un gaps ke liye jinke liye approved resource nahi. Fail ho to exception caller pakadta hai. */
+    private List<LearningItem> aiItems(List<GapView> gaps, Map<Integer, String> priorityBySkill) {
+        JsonNode reply = gemini.suggestLearning(gapPayload(gaps));
         Map<String, JsonNode> bySkill = new HashMap<>();
         for (JsonNode n : reply.path("learning_suggestions")) {
             String skill = n.path("skill").asString("");
@@ -198,8 +286,10 @@ public class SkillGapService {
             }
         }
         List<LearningItem> items = new ArrayList<>();
-        for (Gap g : open) {
-            JsonNode n = bySkill.get(g.skill().skillName().toLowerCase());
+        for (GapView v : gaps) {
+            Gap g = v.toGap();
+            priorityBySkill.put(v.skillId(), v.priority());
+            JsonNode n = bySkill.get(v.skillName().toLowerCase());
             String action = n == null ? "" : n.path("action").asString("");
             if (action.isBlank()) {
                 items.add(scorer.templateLearning(g));
@@ -209,18 +299,10 @@ public class SkillGapService {
                         action.length() > 500 ? action.substring(0, 500) : action,
                         resource.isBlank() ? null : (resource.length() > 1000 ? resource.substring(0, 1000) : resource),
                         MatchScorer.resourceType(n.path("resource_type").asString(null)),
-                        MatchScorer.gapDescription(g)));
+                        MatchScorer.gapDescription(g), true));
             }
         }
-        List<LearningRecommendation> saved = persistence.saveRecommendations(matchingResultId, items);
-        audit.log(currentUser.currentUserId(), AuditService.LEARNING_GENERATED, "matching_results", matchingResultId,
-                null, Map.of("created", saved.size()), null);
-
-        List<LearningRecommendation> all = new ArrayList<>(data.recs());
-        all.addAll(saved);
-        body = toMap(data, all);
-        body.put("note", "Generated " + saved.size() + " learning recommendation(s)");
-        return body;
+        return items;
     }
 
     // ---------------- helpers ----------------
@@ -232,7 +314,7 @@ public class SkillGapService {
                 .orElseThrow(() -> new NoSuchElementException("Matching run not found: " + mr.getMatchingRunId()));
         Context ctx = context(queryService.findRequirement(run.getRequirementId()));
         Candidate c = candidatePool.loadByIds(Set.of(mr.getEmployeeId())).get(mr.getEmployeeId());
-        return new GapData(mr, c, ctx, gapsFor(ctx, c),
+        return build(mr, c, ctx, skillGapRepository.findByMatchingResultId(matchingResultId),
                 learningRecommendationRepository.findByMatchingResultId(matchingResultId));
     }
 
@@ -241,29 +323,80 @@ public class SkillGapService {
         Spec spec = candidatePool.specFromRequirement(
                 requiredSkillRepository.findByRequirementId(req.getRequirementId()),
                 req.getMinimumExperienceMonths(), skillsById);
-        return new Context(spec, skillsById);
+        return new Context(spec, skillsById, req.getRequirementPriority());
     }
 
-    private List<Gap> gapsFor(Context ctx, Candidate c) {
-        return c == null ? List.of() : scorer.score(ctx.spec(), c).gaps();
+    /**
+     * Stored rows hon ya result ke JSON me koi gap hi na ho -> stored (khaali bhi ho sakta hai, "no gaps").
+     * Rows nahi par JSON me gaps hain -> purana run, live calculation.
+     */
+    private GapData build(MatchingResult mr, Candidate c, Context ctx, List<SkillGap> storedRows,
+                          List<LearningRecommendation> recs) {
+        if (!storedRows.isEmpty() || !jsonHasGaps(mr.getSkillGaps())) {
+            List<GapView> views = new ArrayList<>();
+            for (SkillGap row : storedRows) {
+                Skill skill = ctx.skillsById().get(row.getSkillId());
+                views.add(view(row, skill != null ? skill.getSkillName() : "skill#" + row.getSkillId()));
+            }
+            return new GapData(mr, c, ctx, sorted(views), true, recs);
+        }
+        List<GapView> views = new ArrayList<>();
+        if (c != null) {
+            for (Gap g : scorer.score(ctx.spec(), c).gaps()) {
+                SkillGap row = MatchingPersistenceService.toSkillGap(null, g, ctx.requirementPriority());
+                if (row != null) {
+                    views.add(view(row, g.skill().skillName()));
+                }
+            }
+        }
+        return new GapData(mr, c, ctx, sorted(views), false, recs);
+    }
+
+    private static GapView view(SkillGap row, String skillName) {
+        return new GapView(row.getSkillGapId(), row.getSkillId(), skillName, row.getRequiredProficiency(),
+                row.getCurrentProficiency(), Boolean.TRUE.equals(row.getIsMandatory()), row.getGapType(),
+                row.getGapSize(), row.getPriority(), row.getPriorityReason());
+    }
+
+    /** Sabse urgent pehle, phir bada gap, phir naam. */
+    private static List<GapView> sorted(List<GapView> views) {
+        return views.stream()
+                .sorted(Comparator.comparingInt((GapView v) -> GapPriorityRules.rank(v.priority()))
+                        .thenComparing(Comparator.comparingInt(GapView::gapSize).reversed())
+                        .thenComparing(v -> v.skillName() == null ? "" : v.skillName()))
+                .toList();
+    }
+
+    static boolean jsonHasGaps(String raw) {
+        JsonNode n = RequirementQueryService.parseJson(raw);
+        return n != null && (n.path("missing_skills").size() > 0 || n.path("below_required_proficiency").size() > 0);
     }
 
     private Map<String, Object> toMap(GapData d, List<LearningRecommendation> recs) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("matching_result_id", d.result().getMatchingResultId());
+        m.put("matching_run_id", d.result().getMatchingRunId());
         m.put("employee_id", d.result().getEmployeeId());
         m.put("employee_code", d.candidate() != null ? d.candidate().employeeCode() : null);
         m.put("resource_name", d.candidate() != null ? d.candidate().name() : null);
         m.put("match_category", d.result().getMatchCategory());
+        // STORED = skill_gaps table (run ke time ke gaps). LIVE_LEGACY = purana run, abhi ki skills se nikala.
+        m.put("gaps_source", d.stored() ? "STORED" : "LIVE_LEGACY");
 
         List<Map<String, Object>> gaps = new ArrayList<>();
-        for (Gap g : d.gaps()) {
+        for (GapView v : d.gaps()) {
             Map<String, Object> gm = new LinkedHashMap<>();
-            gm.put("skill_name", g.skill().skillName());
-            gm.put("required_level", g.skill().minProficiency());
-            gm.put("current_level", g.currentLevel());
-            gm.put("mandatory", g.skill().mandatory());
-            gm.put("gap_description", MatchScorer.gapDescription(g));
+            gm.put("skill_gap_id", v.skillGapId());
+            gm.put("skill_id", v.skillId());
+            gm.put("skill_name", v.skillName());
+            gm.put("gap_type", v.gapType());
+            gm.put("required_level", v.required());
+            gm.put("current_level", v.current());
+            gm.put("gap_size", v.gapSize());
+            gm.put("mandatory", v.mandatory());
+            gm.put("priority", v.priority());
+            gm.put("priority_reason", v.reason());
+            gm.put("gap_description", MatchScorer.gapDescription(v.toGap()));
             gaps.add(gm);
         }
         m.put("gaps", gaps);
@@ -271,14 +404,14 @@ public class SkillGapService {
         return m;
     }
 
-    private List<Map<String, Object>> gapPayload(List<Gap> gaps) {
+    private List<Map<String, Object>> gapPayload(List<GapView> gaps) {
         List<Map<String, Object>> out = new ArrayList<>();
-        for (Gap g : gaps) {
+        for (GapView g : gaps) {
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("skill", g.skill().skillName());
-            m.put("current_level", g.currentLevel());
-            m.put("target_level", g.skill().minProficiency());
-            m.put("mandatory", g.skill().mandatory());
+            m.put("skill", g.skillName());
+            m.put("current_level", g.current());
+            m.put("target_level", g.required());
+            m.put("mandatory", g.mandatory());
             out.add(m);
         }
         return out;

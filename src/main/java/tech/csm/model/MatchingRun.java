@@ -56,6 +56,17 @@ public class MatchingRun {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
+    /** FR-GAP-08: rematch run kis run ko replace karta hai. Purana run waise hi rehta hai. */
+    @Column(name = "previous_run_id")
+    private Integer previousRunId;
+
+    /** NEW_SEARCH | REMATCH_AFTER_LEARNING | MANUAL_REMATCH */
+    @Column(name = "run_trigger")
+    private String runTrigger = "NEW_SEARCH";
+
+    @Column(name = "rematch_note")
+    private String rematchNote;
+
     public Integer getMatchingRunId() { return matchingRunId; }
     public void setMatchingRunId(Integer v) { this.matchingRunId = v; }
 
@@ -90,4 +101,13 @@ public class MatchingRun {
 
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String v) { this.errorMessage = v; }
+
+    public Integer getPreviousRunId() { return previousRunId; }
+    public void setPreviousRunId(Integer v) { this.previousRunId = v; }
+
+    public String getRunTrigger() { return runTrigger; }
+    public void setRunTrigger(String v) { this.runTrigger = v; }
+
+    public String getRematchNote() { return rematchNote; }
+    public void setRematchNote(String v) { this.rematchNote = v; }
 }

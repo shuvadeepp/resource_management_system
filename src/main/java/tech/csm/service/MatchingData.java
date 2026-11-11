@@ -58,8 +58,9 @@ public final class MatchingData {
                          List<Gap> gaps, List<Transferable> transferable, boolean mandatoryMissing) {
     }
 
+    /** fromAi = true: Gemini ne likha. false: Java ka rule-based template (AI band/fail/us skill ka text nahi). */
     public record LearningItem(ReqSkill skill, Integer currentLevel, String action,
-                               String resource, String resourceType, String gapDescription) {
+                               String resource, String resourceType, String gapDescription, boolean fromAi) {
     }
 
     public record FinalMatch(Scored scored, BigDecimal score, String category, int rank,

@@ -46,6 +46,9 @@ public class MatchingRunController {
         body.put("result_count", (int) matchingResultRepository.countByMatchingRunId(id));
         body.put("algorithm_name", run.getAlgorithmName());
         body.put("model_version", run.getModelVersion());
+        body.put("run_trigger", run.getRunTrigger());
+        body.put("previous_run_id", run.getPreviousRunId());
+        body.put("rematch_note", run.getRematchNote());
         return ResponseEntity.ok(body);
     }
 }

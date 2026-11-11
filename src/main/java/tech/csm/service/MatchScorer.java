@@ -29,7 +29,7 @@ import tech.csm.service.MatchingData.Transferable;
 public class MatchScorer {
 
     private static final Set<String> RESOURCE_TYPES = Set.of(
-            "COURSE", "CERTIFICATION", "DOCUMENTATION", "MENTORING", "PRACTICAL_ASSIGNMENT", "OTHER");
+            "COURSE", "CERTIFICATION", "DOCUMENTATION", "MENTORING", "PRACTICAL_ASSIGNMENT", "OTHER", "ASSESSMENT");
 
     public Scored score(Spec spec, Candidate c) {
         Map<String, CandidateSkill> have = new HashMap<>();
@@ -151,7 +151,7 @@ public class MatchScorer {
                     + " with a mentored practical assignment.";
             type = "PRACTICAL_ASSIGNMENT";
         }
-        return new LearningItem(r, g.currentLevel(), action, null, type, gapDescription(g));
+        return new LearningItem(r, g.currentLevel(), action, null, type, gapDescription(g), false);
     }
 
     public static String gapDescription(Gap g) {

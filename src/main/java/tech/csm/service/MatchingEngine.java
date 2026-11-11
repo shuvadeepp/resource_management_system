@@ -169,7 +169,7 @@ public class MatchingEngine {
             out.add(new LearningItem(g.skill(), g.currentLevel(), truncate(action, 500),
                     resource.isBlank() ? null : truncate(resource, 1000),
                     MatchScorer.resourceType(n.path("resource_type").asString(null)),
-                    MatchScorer.gapDescription(g)));
+                    MatchScorer.gapDescription(g), true));
         }
         return out;
     }

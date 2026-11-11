@@ -26,10 +26,11 @@ public class SkillGapController {
         return ResponseEntity.ok(skillGapService.forResult(id));
     }
 
-    // Latest finished run ke har match ke gaps (Skill Growth screen)
+    // Har match ke gaps (Skill Growth screen). Default latest finished run; ?runId= se koi bhi purana run
     @GetMapping("/requirements/{id}/skill-gaps")
-    public ResponseEntity<?> forRequirement(@PathVariable Integer id) {
-        return ResponseEntity.ok(skillGapService.forRequirement(id));
+    public ResponseEntity<?> forRequirement(@PathVariable Integer id,
+                                            @RequestParam(required = false) Integer runId) {
+        return ResponseEntity.ok(skillGapService.forRequirement(id, runId));
     }
 
     @PutMapping("/learning-recommendations/{id}/review")

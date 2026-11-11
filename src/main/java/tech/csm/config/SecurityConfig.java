@@ -56,6 +56,30 @@ public class SecurityConfig {
                 // Tagged person ko release karna (allocation khatam / approval withdraw) - sirf admin
                 .requestMatchers(HttpMethod.POST, "/api/tagged-people/release").hasRole("ADMIN")
 
+                // Learning recommendation ka review (FR-GAP-06): sirf L&K side + admin.
+                // PUT ka pehle koi rule nahi tha - ab ye endpoint role se bandha hai.
+                .requestMatchers(HttpMethod.PUT, "/api/learning-recommendations/*/review")
+                    .hasAnyRole("ADMIN", "LK_ADMIN", "SKILL_REVIEWER")
+
+                // Generate: L&K reviewer bhi chala sake (pehle sirf USER/ADMIN/PROJECT_MANAGER ke POST allowed the)
+                .requestMatchers(HttpMethod.POST, "/api/matching-results/*/learning-recommendations/generate")
+                    .hasAnyRole("USER", "ADMIN", "PROJECT_MANAGER", "LK_ADMIN", "SKILL_REVIEWER")
+
+                // L&K training repository: banana, badalna aur approve karna sirf L&K admin + admin
+                .requestMatchers(HttpMethod.POST, "/api/learning-resources").hasAnyRole("ADMIN", "LK_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/learning-resources/**").hasAnyRole("ADMIN", "LK_ADMIN")
+
+                // Evidence record karna (FR-GAP-07): skill validate karne wale roles
+                .requestMatchers(HttpMethod.POST, "/api/learning-recommendations/*/evidence")
+                    .hasAnyRole("ADMIN", "LK_ADMIN", "SKILL_REVIEWER", "RESOURCE_MANAGER")
+
+                // Rematch (FR-GAP-08): requirement owner side + L&K jo training ke baad dobara match chalana chahe
+                .requestMatchers(HttpMethod.POST, "/api/requirements/*/rematch")
+                    .hasAnyRole("USER", "ADMIN", "PROJECT_MANAGER", "RESOURCE_MANAGER", "LK_ADMIN")
+
+                // Admin tools (skill_gaps backfill)
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
                 .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("USER", "ADMIN","PROJECT_MANAGER","LK_ADMIN",
                 		"RESOURCE_MANAGER","SKILL_REVIEWER")
                 .requestMatchers(HttpMethod.POST, "/api/**").hasAnyRole("USER", "ADMIN","PROJECT_MANAGER")

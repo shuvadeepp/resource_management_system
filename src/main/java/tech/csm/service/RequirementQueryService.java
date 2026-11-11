@@ -28,6 +28,7 @@ import tech.csm.repository.MatchingResultRepository;
 import tech.csm.repository.MatchingRunRepository;
 import tech.csm.repository.ProjectRequirementRepository;
 import tech.csm.repository.RequiredSkillRepository;
+import tech.csm.repository.SkillGapRepository;
 import tech.csm.repository.UserRepo;
 import tech.csm.service.MatchingData.Candidate;
 import tools.jackson.databind.JsonNode;
@@ -52,6 +53,7 @@ public class RequirementQueryService {
     private final MatchingRunRepository matchingRunRepository;
     private final MatchingResultRepository matchingResultRepository;
     private final LearningRecommendationRepository learningRecommendationRepository;
+    private final SkillGapRepository skillGapRepository;
     private final AllocationDecisionRepository allocationDecisionRepository;
     private final UserRepo userRepo;
     private final CandidatePoolService candidatePool;
@@ -61,6 +63,7 @@ public class RequirementQueryService {
                                    MatchingRunRepository matchingRunRepository,
                                    MatchingResultRepository matchingResultRepository,
                                    LearningRecommendationRepository learningRecommendationRepository,
+                                   SkillGapRepository skillGapRepository,
                                    AllocationDecisionRepository allocationDecisionRepository,
                                    UserRepo userRepo,
                                    CandidatePoolService candidatePool) {
@@ -69,6 +72,7 @@ public class RequirementQueryService {
         this.matchingRunRepository = matchingRunRepository;
         this.matchingResultRepository = matchingResultRepository;
         this.learningRecommendationRepository = learningRecommendationRepository;
+        this.skillGapRepository = skillGapRepository;
         this.allocationDecisionRepository = allocationDecisionRepository;
         this.userRepo = userRepo;
         this.candidatePool = candidatePool;
@@ -171,6 +175,8 @@ public class RequirementQueryService {
         Map<Integer, List<LearningRecommendation>> learning = learningRecommendationRepository
                 .findByMatchingResultIdIn(resultIds).stream()
                 .collect(Collectors.groupingBy(LearningRecommendation::getMatchingResultId));
+        Map<Integer, List<tech.csm.model.SkillGap>> storedGaps = skillGapRepository.findByMatchingResultIdIn(resultIds)
+                .stream().collect(Collectors.groupingBy(tech.csm.model.SkillGap::getMatchingResultId));
         Map<Integer, AllocationDecision> latestDecision = latestDecisions(resultIds);
         Map<Integer, User> makers = users(latestDecision.values().stream()
                 .map(AllocationDecision::getDecisionMaker).collect(Collectors.toSet()));
@@ -181,6 +187,8 @@ public class RequirementQueryService {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("matching_result_id", mr.getMatchingResultId());
             m.put("matching_run_id", mr.getMatchingRunId());
+            m.put("run_trigger", run.getRunTrigger());
+            m.put("previous_run_id", run.getPreviousRunId());
             m.put("employee_id", mr.getEmployeeId());
             m.put("employee_code", c != null ? c.employeeCode() : null);
             m.put("resource_name", c != null ? c.name() : null);
@@ -193,7 +201,8 @@ public class RequirementQueryService {
             m.put("rank_position", mr.getRankPosition());
             m.put("recommendation_status", mr.getRecommendationStatus());
             m.put("strengths", parseJson(mr.getStrengths()));
-            m.put("skill_gaps", parseJson(mr.getSkillGaps()));
+            m.put("skill_gaps", parseJson(mr.getSkillGaps())); // purana JSON, purane clients ke liye
+            m.put("gap_details", gapDetailMaps(storedGaps.getOrDefault(mr.getMatchingResultId(), List.of()), skillsById));
             m.put("explanation", mr.getExplanation());
             m.put("learning_suggestions", learningMaps(
                     learning.getOrDefault(mr.getMatchingResultId(), List.of()), skillsById));
@@ -242,6 +251,30 @@ public class RequirementQueryService {
         return m;
     }
 
+    /** Stored skill_gaps rows (FR-GAP-01..03), sabse urgent pehle. Purane runs me khaali list. */
+    static List<Map<String, Object>> gapDetailMaps(List<tech.csm.model.SkillGap> rows, Map<Integer, Skill> skillsById) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        rows.stream()
+                .sorted(Comparator.comparingInt((tech.csm.model.SkillGap g) -> GapPriorityRules.rank(g.getPriority()))
+                        .thenComparing(Comparator.comparingInt((tech.csm.model.SkillGap g) -> g.getGapSize()).reversed()))
+                .forEach(g -> {
+                    Skill skill = skillsById.get(g.getSkillId());
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("skill_gap_id", g.getSkillGapId());
+                    m.put("skill_id", g.getSkillId());
+                    m.put("skill_name", skill != null ? skill.getSkillName() : null);
+                    m.put("gap_type", g.getGapType());
+                    m.put("mandatory", g.getIsMandatory());
+                    m.put("required_level", g.getRequiredProficiency());
+                    m.put("current_level", g.getCurrentProficiency());
+                    m.put("gap_size", g.getGapSize());
+                    m.put("priority", g.getPriority());
+                    m.put("priority_reason", g.getPriorityReason());
+                    out.add(m);
+                });
+        return out;
+    }
+
     static List<Map<String, Object>> learningMaps(List<LearningRecommendation> recs, Map<Integer, Skill> skillsById) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (LearningRecommendation lr : recs) {
@@ -256,6 +289,17 @@ public class RequirementQueryService {
             l.put("resource_type", lr.getResourceType());
             l.put("review_status", lr.getReviewStatus());
             l.put("review_comments", lr.getReviewComments());
+            // Module 5 pathway fields - recommendation_source dikhao taaki reviewer AI wale pehchane
+            l.put("skill_gap_id", lr.getSkillGapId());
+            l.put("learning_resource_id", lr.getLearningResourceId());
+            l.put("recommendation_source", lr.getRecommendationSource());
+            l.put("priority", lr.getPriority());
+            l.put("sequence_order", lr.getSequenceOrder());
+            l.put("estimated_hours", lr.getEstimatedHours());
+            l.put("estimated_weeks", lr.getEstimatedWeeks());
+            l.put("validation_method", lr.getValidationMethod());
+            l.put("started_at", lr.getStartedAt());
+            l.put("completed_at", lr.getCompletedAt());
             out.add(l);
         }
         return out;

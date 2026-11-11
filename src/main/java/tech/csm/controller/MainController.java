@@ -98,6 +98,19 @@ public class MainController {
 		return ResponseEntity.ok(skillRepository.findAll());
 	}
 
+	// Skill master with ids, for the L&K catalog screen. /api/skills keeps its old shape (no ids).
+	@GetMapping("/skills/with-ids")
+	public ResponseEntity<?> getSkillsWithIds() {
+		List<java.util.Map<String, Object>> list = new ArrayList<>();
+		for (tech.csm.model.Skill s : skillRepository.findAll()) {
+			java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+			row.put("skill_id", s.getSkillId());
+			row.put("skill_name", s.getSkillName());
+			list.add(row);
+		}
+		return ResponseEntity.ok(list);
+	}
+
 	 
 	@GetMapping("/employees/search")
 	public ResponseEntity<?> searchEmployees(

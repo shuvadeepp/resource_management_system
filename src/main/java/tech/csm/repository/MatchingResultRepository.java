@@ -15,6 +15,8 @@ public interface MatchingResultRepository extends JpaRepository<MatchingResult, 
 
     List<MatchingResult> findByMatchingRunIdOrderByRankPositionAsc(Integer matchingRunId);
 
+    List<MatchingResult> findByMatchingRunIdIn(Collection<Integer> matchingRunIds);
+
     List<MatchingResult> findByRecommendationStatus(String recommendationStatus);
 
     long countByMatchingRunId(Integer matchingRunId);

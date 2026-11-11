@@ -50,6 +50,12 @@ public class AuditService {
     public static final String AVAILABILITY_SYNCED = "AVAILABILITY_SYNCED";
     public static final String LEARNING_REVIEWED = "LEARNING_RECOMMENDATION_REVIEWED";
     public static final String LEARNING_GENERATED = "LEARNING_RECOMMENDATIONS_GENERATED";
+    public static final String LEARNING_RESOURCE_CREATED = "LEARNING_RESOURCE_CREATED";
+    public static final String LEARNING_RESOURCE_UPDATED = "LEARNING_RESOURCE_UPDATED";
+    public static final String LEARNING_RESOURCE_APPROVAL = "LEARNING_RESOURCE_APPROVAL_CHANGED";
+    public static final String EVIDENCE_RECORDED = "SKILL_EVIDENCE_RECORDED";
+    public static final String SKILL_UPDATED = "EMPLOYEE_SKILL_UPDATED";
+    public static final String GAPS_BACKFILLED = "SKILL_GAPS_BACKFILLED";
 
     private static final Logger log = LoggerFactory.getLogger(AuditService.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
