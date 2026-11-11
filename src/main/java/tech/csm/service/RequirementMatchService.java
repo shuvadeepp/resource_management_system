@@ -93,6 +93,8 @@ public class RequirementMatchService {
 
     // ---------------- list only (nothing saved) ----------------
 
+    
+    
     private Result filterOnly(RequirementRequest r) {
         List<Candidate> candidates = candidatePool.load(r.designation(), r.department(), r.minimumExperienceYears());
 
