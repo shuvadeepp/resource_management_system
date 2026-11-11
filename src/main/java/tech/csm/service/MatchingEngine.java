@@ -219,3 +219,4 @@ public class MatchingEngine {
         return s == null || s.length() <= max ? s : s.substring(0, max);
     }
 }
+

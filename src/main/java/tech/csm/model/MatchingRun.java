@@ -111,3 +111,4 @@ public class MatchingRun {
     public String getRematchNote() { return rematchNote; }
     public void setRematchNote(String v) { this.rematchNote = v; }
 }
+

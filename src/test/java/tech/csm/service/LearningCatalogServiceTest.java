@@ -62,3 +62,4 @@ class LearningCatalogServiceTest {
         assertEquals(10, LearningCatalogService.weeks(new BigDecimal("10.0"), 0)); // bad config -> 1 hour/week
     }
 }
+

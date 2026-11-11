@@ -44,3 +44,4 @@ public final class GapPriorityRules {
         return i < 0 ? LADDER.size() : LADDER.size() - 1 - i;
     }
 }
+

@@ -71,3 +71,4 @@ public final class MatchingData {
     public record Outcome(List<FinalMatch> matches, int poolSize, String aiStatus, String aiError) {
     }
 }
+

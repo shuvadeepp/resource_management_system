@@ -83,3 +83,4 @@ class GapPriorityRulesTest {
         assertNotNull(rows.get(0).getSkillId());
     }
 }
+

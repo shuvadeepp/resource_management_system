@@ -74,3 +74,4 @@ public class SkillGapReportController {
         return ResponseEntity.ok(reports.pathwayForEmployee(id, requirementId, runId));
     }
 }
+

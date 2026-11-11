@@ -18,3 +18,4 @@ public interface LearningResourceRepository extends JpaRepository<LearningResour
 
     Optional<LearningResource> findBySkillIdAndResourceTitle(Integer skillId, String resourceTitle);
 }
+

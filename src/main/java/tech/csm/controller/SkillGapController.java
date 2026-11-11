@@ -44,3 +44,4 @@ public class SkillGapController {
         return ResponseEntity.ok(skillGapService.generate(id));
     }
 }
+

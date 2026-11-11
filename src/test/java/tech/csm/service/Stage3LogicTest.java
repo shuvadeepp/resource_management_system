@@ -129,3 +129,4 @@ class Stage3LogicTest {
         assertEquals(1, p.notInRequirement());
     }
 }
+

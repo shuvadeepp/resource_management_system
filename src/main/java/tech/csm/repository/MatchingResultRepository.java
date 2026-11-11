@@ -27,3 +27,4 @@ public interface MatchingResultRepository extends JpaRepository<MatchingResult, 
     @Query("select m.matchingRunId, count(m) from MatchingResult m where m.matchingRunId in :ids group by m.matchingRunId")
     List<Object[]> countByRunIds(@Param("ids") Collection<Integer> runIds);
 }
+

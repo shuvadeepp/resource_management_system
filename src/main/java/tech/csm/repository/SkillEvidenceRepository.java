@@ -10,3 +10,4 @@ public interface SkillEvidenceRepository extends JpaRepository<SkillEvidence, In
 
     List<SkillEvidence> findByLearningRecommendationIdOrderByEvidenceIdDesc(Integer learningRecommendationId);
 }
+

@@ -28,3 +28,4 @@ public interface MatchingRunRepository extends JpaRepository<MatchingRun, Intege
     @Query("select r.runStatus, count(r) from MatchingRun r group by r.runStatus")
     List<Object[]> countByStatus();
 }
+

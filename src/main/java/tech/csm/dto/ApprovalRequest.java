@@ -10,3 +10,4 @@ public record ApprovalRequest(
         @NotNull(message = "approved is required (true or false)")
         @JsonProperty("approved") Boolean approved
 ) {}
+

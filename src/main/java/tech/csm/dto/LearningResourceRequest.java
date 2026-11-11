@@ -46,3 +46,4 @@ public record LearningResourceRequest(
         // default true
         @JsonProperty("is_active") Boolean isActive
 ) {}
+

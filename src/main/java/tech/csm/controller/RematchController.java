@@ -45,3 +45,4 @@ public class RematchController {
         return ResponseEntity.ok(compareService.compare(id, withRunId));
     }
 }
+

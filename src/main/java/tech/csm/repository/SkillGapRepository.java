@@ -13,3 +13,4 @@ public interface SkillGapRepository extends JpaRepository<SkillGap, Integer> {
 
     List<SkillGap> findByMatchingResultIdIn(Collection<Integer> matchingResultIds);
 }
+
