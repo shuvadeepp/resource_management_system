@@ -2,9 +2,6 @@ package tech.csm.model;
 
 import java.time.LocalDateTime;
 
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -37,11 +34,10 @@ public class AuditLog {
     @Column(name = "affected_record_id")
     private Integer affectedRecordId;
 
-    @JdbcTypeCode(SqlTypes.JSON)
+    // Plain String binding (no @JdbcTypeCode(JSON)): avoids cast(? as json), unsupported on MariaDB.
     @Column(name = "old_values", columnDefinition = "json")
     private String oldValues;
 
-    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "new_values", columnDefinition = "json")
     private String newValues;
 

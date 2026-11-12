@@ -3,9 +3,6 @@ package tech.csm.model;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -40,11 +37,11 @@ public class MatchingResult {
     @Column(name = "match_category")
     private String matchCategory;
 
-    @JdbcTypeCode(SqlTypes.JSON)
+    // Plain String binding (no @JdbcTypeCode(JSON)): Hibernate would otherwise emit
+    // cast(? as json), which MariaDB does not support. MySQL/MariaDB accept the string as-is.
     @Column(name = "strengths", columnDefinition = "json")
     private String strengths;
 
-    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "skill_gaps", columnDefinition = "json")
     private String skillGaps;
 
