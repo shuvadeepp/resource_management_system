@@ -77,6 +77,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/requirements/*/rematch")
                     .hasAnyRole("USER", "ADMIN", "PROJECT_MANAGER", "RESOURCE_MANAGER", "LK_ADMIN")
 
+                // Skill master: banana, badalna, hatana sirf ADMIN + LK_ADMIN (generic POST /api/** se pehle)
+                .requestMatchers(HttpMethod.POST, "/api/skills").hasAnyRole("ADMIN", "LK_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/skills/*").hasAnyRole("ADMIN", "LK_ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/skills/*").hasAnyRole("ADMIN", "LK_ADMIN")
+
                 // Adding a project: admin only (must come before the generic POST /api/** rule)
                 .requestMatchers(HttpMethod.POST, "/api/projects").hasRole("ADMIN")
 
