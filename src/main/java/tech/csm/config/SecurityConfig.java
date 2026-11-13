@@ -77,6 +77,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/requirements/*/rematch")
                     .hasAnyRole("USER", "ADMIN", "PROJECT_MANAGER", "RESOURCE_MANAGER", "LK_ADMIN")
 
+                // Adding a project: admin only (must come before the generic POST /api/** rule)
+                .requestMatchers(HttpMethod.POST, "/api/projects").hasRole("ADMIN")
+
                 // Admin tools (skill_gaps backfill)
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
